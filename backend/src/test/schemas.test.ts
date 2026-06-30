@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import Ajv from 'ajv';
 import { GithubDataSchema, AnalysisSchema } from '../schemas';
-import type { GithubData } from '../schemas';
-import type { Analysis } from '../schemas';
+import type { GithubData, Analysis } from '../schemas';
 
 const ajv = new Ajv({ strict: false });
-
 const validateGithub = ajv.compile(GithubDataSchema);
 const validateAnalysis = ajv.compile(AnalysisSchema);
 
@@ -48,26 +46,36 @@ const validAnalysis: Analysis = {
     {
       number: 1,
       title: 'Fix render bug',
+      github_url: 'https://github.com/facebook/react/issues/1',
       score: 7,
       reason: 'Well scoped, has good test coverage',
       difficulty: 'beginner',
+      signals: { no_comments: false, no_related_prs: true, is_fresh: false },
     },
   ],
   architecture: {
     summary: 'React is a declarative UI library.',
     key_modules: ['src/react', 'packages/react-dom'],
-    ownership: { 'src/react': ['gaearon'] },
+    ownership: { 'src/react': ['https://github.com/gaearon'] },
   },
   health: {
     summary: 'Very active project with fast merges.',
     activity: 'high',
-    pr_merge_speed: 'fast',
-    contributor_concentration: 'low',
+    pr_merge_speed: 'avg 2 days',
+    contributor_concentration: 'low — well distributed',
     trend: 'stable',
   },
   starting_points: [
-    { path: 'README.md', reason: 'Start here for overview' },
-    { path: 'packages/react/src/React.js', reason: 'Core exports' },
+    {
+      name: 'README.md',
+      url: 'https://github.com/facebook/react/blob/main/README.md',
+      reason: 'Start here for overview',
+    },
+    {
+      name: 'Core exports',
+      url: 'https://github.com/facebook/react/blob/main/packages/react/src/React.js',
+      reason: 'Entry point for the library',
+    },
   ],
 };
 
@@ -126,8 +134,30 @@ describe('AnalysisSchema', () => {
     expect(validateAnalysis(bad)).toBe(false);
   });
 
-  it('rejects empty starting_points array', () => {
+  it('rejects empty starting_points', () => {
     const bad = { ...validAnalysis, starting_points: [] };
+    expect(validateAnalysis(bad)).toBe(false);
+  });
+
+  it('validates signals object', () => {
+    const bad = {
+      ...validAnalysis,
+      issues: [{ ...validAnalysis.issues[0], signals: { no_comments: 'yes' } }],
+    };
+    expect(validateAnalysis(bad)).toBe(false);
+  });
+
+  it('requires github_url on issues', () => {
+    const { github_url: _u, ...issueWithoutUrl } = validAnalysis.issues[0];
+    const bad = { ...validAnalysis, issues: [issueWithoutUrl] };
+    expect(validateAnalysis(bad)).toBe(false);
+  });
+
+  it('requires name and url on starting_points', () => {
+    const bad = {
+      ...validAnalysis,
+      starting_points: [{ path: 'README.md', reason: 'start here' }],
+    };
     expect(validateAnalysis(bad)).toBe(false);
   });
 });
