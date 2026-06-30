@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { upsertRepo, findRepoById } from '../dao/repos';
 import { findReportByRepoId } from '../dao/reports';
 import { isValidGitHubUrl } from '../utils/validation';
+import { processRepo } from '../services/processor';
 
 export const analyzeRouter = Router();
 
@@ -21,6 +22,11 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
   try {
     const repo = await upsertRepo(url);
     res.json({ id: repo.id, status: repo.status });
+
+    // fire-and-forget — runs after response is sent
+    processRepo(repo.id, url).catch((err) =>
+      console.error('[analyze] unhandled processRepo error:', err)
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal server error' });
