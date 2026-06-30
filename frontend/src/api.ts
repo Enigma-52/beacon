@@ -45,6 +45,10 @@ export async function getIssueResearch(repoId: number, issueNumber: number): Pro
   return res.json();
 }
 
+export async function cancelIssueResearch(repoId: number, issueNumber: number): Promise<void> {
+  await fetch(`${BASE}/research/${repoId}/${issueNumber}/cancel`, { method: 'POST' });
+}
+
 export async function runIssueResearch(repoId: number, issueNumber: number): Promise<IssueResearchResponse> {
   const res = await fetch(`${BASE}/research/${repoId}/${issueNumber}`, { method: 'POST' });
   if (!res.ok) {

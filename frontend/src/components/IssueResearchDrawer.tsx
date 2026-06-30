@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getIssueResearch, runIssueResearch } from '../api';
+import { getIssueResearch, runIssueResearch, cancelIssueResearch } from '../api';
 import type { IssueResearch, AgentEvent } from '../types';
 import type { RankedIssue } from '../analysisTypes';
 
@@ -123,9 +123,21 @@ export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props)
         </div>
 
         {/* Action button */}
-        {!running && (
+        {!running ? (
           <button onClick={handleResearch} style={primaryBtn}>
             {research ? 'Re-run deep research' : 'Run deep research'}
+          </button>
+        ) : (
+          <button
+            onClick={async () => {
+              await cancelIssueResearch(repoId, issue.number);
+              setRunning(false);
+              wsRef.current?.close();
+              setSteps((prev) => [...prev, { type: 'research_error', message: 'Cancelled' }]);
+            }}
+            style={{ ...primaryBtn, background: '#f87171' }}
+          >
+            Cancel
           </button>
         )}
 

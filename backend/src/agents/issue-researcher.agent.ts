@@ -61,7 +61,13 @@ async function getPrChangedFiles(owner: string, repo: string, prNumber: number):
 }
 
 async function getFileContent(owner: string, repo: string, path: string): Promise<string> {
-  const data = await ghGet<Raw>(`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`);
+  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, { headers: buildHeaders() });
+  if (res.status === 404) {
+    // File doesn't exist at HEAD (common with changelog/temp files from PRs) — not a tool failure
+    return JSON.stringify({ note: `File not found at HEAD: ${path}. It may have been added or deleted in a past PR. Skip this file.` });
+  }
+  if (!res.ok) throw new Error(`GitHub → ${res.status}`);
+  const data = await res.json() as Raw;
   if (data.encoding === 'base64' && data.content) {
     return Buffer.from(data.content as string, 'base64').toString('utf-8').slice(0, 4000);
   }
@@ -185,7 +191,8 @@ export async function runIssueResearcherAgent(
   owner: string,
   repo: string,
   issueNumber: number,
-  emit: AgentEmitter = noopEmitter
+  emit: AgentEmitter = noopEmitter,
+  signal: AbortSignal = new AbortController().signal
 ): Promise<IssueResearch> {
   const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -208,7 +215,7 @@ Strategy (follow in order, don't skip steps):
 Important: call produce_issue_research as soon as you have enough context — do not keep calling tools indefinitely.
 
 For files_to_change URL: https://github.com/${owner}/${repo}/blob/HEAD/{path}
-For reviewer_to_ping: https://github.com/{login}`;
+For reviewer_to_ping: use the GitHub profile URL of a specific individual contributor (not the org). Pick the person who authored or reviewed the most similar merged PRs: https://github.com/{login}`;
 
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
@@ -218,6 +225,12 @@ For reviewer_to_ping: https://github.com/{login}`;
   let consecutiveErrors = 0;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
+    if (signal.aborted) {
+      const msg = 'Issue research cancelled';
+      emit({ type: 'research_error', message: msg });
+      throw new Error(msg);
+    }
+
     // Warn LLM when getting close to the limit
     if (i === MAX_ITERATIONS - 3) {
       messages.push({
@@ -235,6 +248,7 @@ For reviewer_to_ping: https://github.com/{login}`;
         'X-Title': 'Beacon',
       },
       body: JSON.stringify({ model, messages, tools: RESEARCHER_TOOLS, tool_choice: 'auto', temperature: 0.1 }),
+      signal,
     });
 
     if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
@@ -265,7 +279,7 @@ For reviewer_to_ping: https://github.com/{login}`;
             throw new Error(msg);
           }
           log.info({ owner, repo, issueNumber, iterations: i + 1 }, 'issue research complete');
-          emit({ type: 'research_done' });
+          // research_done emitted by route after DB save to avoid race condition
           return args as IssueResearch;
         }
 
