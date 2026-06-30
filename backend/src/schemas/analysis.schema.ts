@@ -1,14 +1,21 @@
 export interface RankedIssue {
   number: number;
   title: string;
+  github_url: string;
   score: number;
   reason: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
+  signals: {
+    no_comments: boolean;
+    no_related_prs: boolean;
+    is_fresh: boolean; // opened within last 30 days
+  };
 }
 
 export interface Architecture {
   summary: string;
   key_modules: string[];
+  /** module/dir path → array of GitHub profile URLs (https://github.com/{login}) */
   ownership: Record<string, string[]>;
 }
 
@@ -21,7 +28,8 @@ export interface Health {
 }
 
 export interface StartingPoint {
-  path: string;
+  name: string;
+  url: string;
   reason: string;
 }
 
@@ -42,14 +50,25 @@ export const AnalysisSchema = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['number', 'title', 'score', 'reason', 'difficulty'],
+        required: ['number', 'title', 'github_url', 'score', 'reason', 'difficulty', 'signals'],
         additionalProperties: false,
         properties: {
           number: { type: 'number' },
           title: { type: 'string' },
+          github_url: { type: 'string' },
           score: { type: 'number', minimum: 1, maximum: 10 },
           reason: { type: 'string' },
           difficulty: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
+          signals: {
+            type: 'object',
+            required: ['no_comments', 'no_related_prs', 'is_fresh'],
+            additionalProperties: false,
+            properties: {
+              no_comments: { type: 'boolean' },
+              no_related_prs: { type: 'boolean' },
+              is_fresh: { type: 'boolean' },
+            },
+          },
         },
       },
     },
@@ -84,10 +103,11 @@ export const AnalysisSchema = {
       maxItems: 5,
       items: {
         type: 'object',
-        required: ['path', 'reason'],
+        required: ['name', 'url', 'reason'],
         additionalProperties: false,
         properties: {
-          path: { type: 'string' },
+          name: { type: 'string' },
+          url: { type: 'string' },
           reason: { type: 'string' },
         },
       },
