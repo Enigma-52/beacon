@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import Ajv from 'ajv';
 import { GithubDataSchema, AnalysisSchema } from '../schemas';
+import { IssueResearchSchema } from '../schemas/issue-research.schema';
+import type { IssueResearch } from '../schemas/issue-research.schema';
 import type { GithubData, Analysis } from '../schemas';
 
 const ajv = new Ajv({ strict: false });
 const validateGithub = ajv.compile(GithubDataSchema);
 const validateAnalysis = ajv.compile(AnalysisSchema);
+const validateResearch = ajv.compile(IssueResearchSchema);
 
 const validGithubData: GithubData = {
   metadata: {
@@ -159,5 +162,74 @@ describe('AnalysisSchema', () => {
       starting_points: [{ path: 'README.md', reason: 'start here' }],
     };
     expect(validateAnalysis(bad)).toBe(false);
+  });
+});
+
+const validResearch: IssueResearch = {
+  summary: 'This issue asks for adding support for X feature.',
+  approach: '1. Find the config file\n2. Add the new option\n3. Write tests',
+  files_to_change: [
+    {
+      path: 'src/config.go',
+      reason: 'Add the new config option here',
+      url: 'https://github.com/owner/repo/blob/main/src/config.go',
+    },
+  ],
+  similar_prs: [
+    {
+      number: 42,
+      title: 'Add support for Y feature',
+      url: 'https://github.com/owner/repo/pull/42',
+    },
+  ],
+  effort_estimate: 'days',
+  reviewer_to_ping: 'https://github.com/somedev',
+};
+
+describe('IssueResearchSchema', () => {
+  it('validates correct research output', () => {
+    expect(validateResearch(validResearch)).toBe(true);
+  });
+
+  it('accepts hours effort estimate', () => {
+    expect(validateResearch({ ...validResearch, effort_estimate: 'hours' })).toBe(true);
+  });
+
+  it('accepts week+ effort estimate', () => {
+    expect(validateResearch({ ...validResearch, effort_estimate: 'week+' })).toBe(true);
+  });
+
+  it('rejects invalid effort_estimate', () => {
+    expect(validateResearch({ ...validResearch, effort_estimate: 'months' })).toBe(false);
+  });
+
+  it('rejects missing summary', () => {
+    const { summary: _s, ...bad } = validResearch;
+    expect(validateResearch(bad)).toBe(false);
+  });
+
+  it('rejects missing approach', () => {
+    const { approach: _a, ...bad } = validResearch;
+    expect(validateResearch(bad)).toBe(false);
+  });
+
+  it('rejects files_to_change item missing url', () => {
+    const bad = {
+      ...validResearch,
+      files_to_change: [{ path: 'src/config.go', reason: 'add option' }],
+    };
+    expect(validateResearch(bad)).toBe(false);
+  });
+
+  it('rejects similar_prs item missing number', () => {
+    const bad = {
+      ...validResearch,
+      similar_prs: [{ title: 'Add Y', url: 'https://github.com/owner/repo/pull/42' }],
+    };
+    expect(validateResearch(bad)).toBe(false);
+  });
+
+  it('accepts empty files_to_change and similar_prs', () => {
+    expect(validateResearch({ ...validResearch, files_to_change: [], similar_prs: [] })).toBe(true);
   });
 });
