@@ -1,0 +1,14 @@
+{
+  "name": "beacon",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:db": "docker compose up db -d",
+    "test": "npm test -w backend && npm test -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend"
+  },
+  "workspaces": ["backend", "frontend"],
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
