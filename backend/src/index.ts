@@ -1,8 +1,12 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { WebSocketServer } from 'ws';
 import { analyzeRouter } from './routes/analyze';
 import { initDb } from './services/db';
+import { eventBus } from './services/event-bus';
+import { log } from './services/logger';
 
 dotenv.config();
 
@@ -18,15 +22,32 @@ app.get('/health', (_req, res) => {
 
 app.use('/', analyzeRouter);
 
+const httpServer = http.createServer(app);
+
+const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+wss.on('connection', (socket, req) => {
+  const url = new URL(req.url ?? '', `http://localhost:${PORT}`);
+  const rawId = url.searchParams.get('id');
+  const repoId = rawId ? parseInt(rawId, 10) : NaN;
+
+  if (isNaN(repoId)) {
+    socket.close(1008, 'missing ?id=');
+    return;
+  }
+
+  eventBus.subscribe(repoId, socket);
+});
+
 async function start() {
   await initDb();
-  app.listen(PORT, () => {
-    console.log(`Backend running on port ${PORT}`);
+  httpServer.listen(PORT, () => {
+    log.info({ port: PORT }, 'beacon backend started');
   });
 }
 
 start().catch((err) => {
-  console.error('Failed to start:', err);
+  log.error({ err }, 'failed to start');
   process.exit(1);
 });
 
