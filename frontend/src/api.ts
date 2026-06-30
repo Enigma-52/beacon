@@ -27,3 +27,7 @@ export async function getReport(id: number): Promise<RepoReport> {
 
   return res.json();
 }
+
+export async function cancelAnalysis(id: number): Promise<void> {
+  await fetch(`${BASE}/cancel/${id}`, { method: 'POST' });
+}
