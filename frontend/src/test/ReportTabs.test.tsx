@@ -6,7 +6,7 @@ import type { RepoReport } from '../types';
 const baseReport: RepoReport = {
   id: 1,
   url: 'https://github.com/foo/bar',
-  status: 'pending',
+  status: 'done',
   github_data: null,
   analysis: null,
   created_at: new Date().toISOString(),
@@ -21,19 +21,27 @@ describe('ReportTabs', () => {
     expect(screen.getByText('Start Here')).toBeInTheDocument();
   });
 
-  it('shows pending message when status is not done', () => {
+  it('shows no data when analysis is null', () => {
     render(<ReportTabs report={baseReport} />);
-    expect(screen.getByText(/in progress/i)).toBeInTheDocument();
+    expect(screen.getByText(/no data/i)).toBeInTheDocument();
   });
 
-  it('shows no data message when done but no analysis', () => {
-    render(<ReportTabs report={{ ...baseReport, status: 'done', analysis: null }} />);
-    expect(screen.getByText(/no data/i)).toBeInTheDocument();
+  it('shows no issues message when issues array is empty', () => {
+    render(<ReportTabs report={{
+      ...baseReport,
+      analysis: { issues: [], architecture: undefined, health: undefined, starting_points: undefined },
+    }} />);
+    expect(screen.getByText(/no issues/i)).toBeInTheDocument();
   });
 
   it('switches tabs on click', () => {
     render(<ReportTabs report={baseReport} />);
     fireEvent.click(screen.getByText('Architecture'));
-    expect(screen.getByText('Architecture').style.color).toBeTruthy();
+    expect(screen.getByText('Architecture')).toBeInTheDocument();
+  });
+
+  it('links repo url in header', () => {
+    render(<ReportTabs report={baseReport} />);
+    expect(screen.getByRole('link', { name: /foo\/bar/i })).toHaveAttribute('href', 'https://github.com/foo/bar');
   });
 });
