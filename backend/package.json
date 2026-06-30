@@ -6,7 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "ajv": "^8.17.1",
@@ -23,6 +24,7 @@
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.6",
     "@types/ws": "^8.5.12",
+    "@vitest/coverage-v8": "^2.1.9",
     "pino-pretty": "^11.2.2",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
