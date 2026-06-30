@@ -6,7 +6,10 @@ export type AgentEvent =
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; success: boolean; summary: string }
   | { type: 'done'; iterations: number; totalTokens: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'research_started'; owner: string; repo: string; issueNumber: number }
+  | { type: 'research_done' }
+  | { type: 'research_error'; message: string };
 
 export type AgentEmitter = (event: AgentEvent) => void;
 

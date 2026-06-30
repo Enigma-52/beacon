@@ -2,6 +2,7 @@ import Ajv from 'ajv';
 import { IssueResearchSchema } from '../schemas/issue-research.schema';
 import type { IssueResearch } from '../schemas/issue-research.schema';
 import { log } from '../services/logger';
+import type { AgentEmitter } from './events';
 
 const ajv = new Ajv({ strict: false });
 const validateResearch = ajv.compile(IssueResearchSchema);
@@ -9,6 +10,10 @@ const validateResearch = ajv.compile(IssueResearchSchema);
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const GITHUB_API = 'https://api.github.com';
+const MAX_ITERATIONS = 12;
+const MAX_CONSECUTIVE_ERRORS = 3;
+
+const noopEmitter: AgentEmitter = () => {};
 
 function buildHeaders(): Record<string, string> {
   const h: Record<string, string> = { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'beacon-app' };
@@ -33,7 +38,7 @@ async function getIssueFull(owner: string, repo: string, issueNumber: number): P
   const body = (issue.body as string | null)?.slice(0, 2000) ?? '';
   const commentText = (comments as Raw[])
     .slice(0, 10)
-    .map((c) => `@${c.user && (c.user as Raw).login}: ${(c.body as string | null)?.slice(0, 400) ?? ''}`)
+    .map((c) => `@${(c.user as Raw | null)?.login ?? 'unknown'}: ${(c.body as string | null)?.slice(0, 400) ?? ''}`)
     .join('\n');
   return JSON.stringify({ title: issue.title, body, labels: issue.labels, comments: commentText });
 }
@@ -63,6 +68,28 @@ async function getFileContent(owner: string, repo: string, path: string): Promis
   return '';
 }
 
+function toolSummary(name: string, content: string): string {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (name === 'get_issue_full') {
+      const p = parsed as { title?: string };
+      return `issue: ${p.title ?? 'loaded'}`;
+    }
+    if (name === 'search_similar_prs') {
+      const p = parsed as unknown[];
+      return `${p.length} similar PR${p.length !== 1 ? 's' : ''} found`;
+    }
+    if (name === 'get_pr_changed_files') {
+      const p = parsed as unknown[];
+      return `${p.length} file${p.length !== 1 ? 's' : ''} changed`;
+    }
+    if (name === 'get_file_content') {
+      return `file read (${content.length} chars)`;
+    }
+  } catch { /* ignore */ }
+  return 'ok';
+}
+
 const RESEARCHER_TOOLS = [
   {
     type: 'function',
@@ -84,7 +111,7 @@ const RESEARCHER_TOOLS = [
       parameters: {
         type: 'object',
         required: ['query'],
-        properties: { query: { type: 'string', description: 'keywords from the issue title/body' } },
+        properties: { query: { type: 'string' } },
       },
     },
   },
@@ -104,7 +131,7 @@ const RESEARCHER_TOOLS = [
     type: 'function',
     function: {
       name: 'get_file_content',
-      description: 'Read a file from the repo to understand the relevant code',
+      description: 'Read a file from the repo',
       parameters: {
         type: 'object',
         required: ['path'],
@@ -116,23 +143,19 @@ const RESEARCHER_TOOLS = [
     type: 'function',
     function: {
       name: 'produce_issue_research',
-      description: 'Output the completed issue research',
+      description: 'Output the completed issue research. Call this when you have enough context.',
       parameters: {
         type: 'object',
         required: ['summary', 'approach', 'files_to_change', 'similar_prs', 'effort_estimate', 'reviewer_to_ping'],
         properties: {
-          summary: { type: 'string', description: 'Plain English — what is this issue asking for?' },
-          approach: { type: 'string', description: 'Step-by-step guide for a contributor to fix this' },
+          summary: { type: 'string' },
+          approach: { type: 'string' },
           files_to_change: {
             type: 'array',
             items: {
               type: 'object',
               required: ['path', 'reason', 'url'],
-              properties: {
-                path: { type: 'string' },
-                reason: { type: 'string' },
-                url: { type: 'string', description: 'Full GitHub URL to the file' },
-              },
+              properties: { path: { type: 'string' }, reason: { type: 'string' }, url: { type: 'string' } },
             },
           },
           similar_prs: {
@@ -144,7 +167,7 @@ const RESEARCHER_TOOLS = [
             },
           },
           effort_estimate: { type: 'string', enum: ['hours', 'days', 'week+'] },
-          reviewer_to_ping: { type: 'string', description: 'GitHub profile URL of the best maintainer to review this PR' },
+          reviewer_to_ping: { type: 'string' },
         },
       },
     },
@@ -161,35 +184,48 @@ interface Message {
 export async function runIssueResearcherAgent(
   owner: string,
   repo: string,
-  issueNumber: number
+  issueNumber: number,
+  emit: AgentEmitter = noopEmitter
 ): Promise<IssueResearch> {
   const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
 
   log.info({ owner, repo, issueNumber }, 'issue researcher agent started');
+  emit({ type: 'research_started', owner, repo, issueNumber });
 
-  const systemPrompt = `You are an expert open source contributor researcher for the GitHub repo ${owner}/${repo}.
+  const systemPrompt = `You are a deep issue researcher for the GitHub repo ${owner}/${repo}.
 
-Your task: deeply research issue #${issueNumber} and produce a concrete implementation guide for a new contributor.
+Your task: research issue #${issueNumber} and produce a concrete guide for a new contributor.
 
-Strategy:
-1. Call get_issue_full to read the issue and its discussion.
-2. Call search_similar_prs with keywords from the issue title to find related merged PRs.
-3. Call get_pr_changed_files on the most relevant PR to see which files were involved.
-4. Call get_file_content on 1-2 key files to understand the relevant code.
+Strategy (follow in order, don't skip steps):
+1. Call get_issue_full to read the issue and discussion.
+2. Call search_similar_prs with 2-3 keywords from the issue title to find related merged PRs.
+3. Call get_pr_changed_files on the most relevant PR to see which files were changed.
+4. Optionally call get_file_content on 1-2 key files to understand the code structure.
 5. Call produce_issue_research with your findings.
 
-For files_to_change: include the full GitHub URL: https://github.com/${owner}/${repo}/blob/HEAD/{path}
-For reviewer_to_ping: use the full GitHub profile URL: https://github.com/{login}
-For effort_estimate: 'hours' = a few hours of work, 'days' = 1-3 days, 'week+' = complex.`;
+Important: call produce_issue_research as soon as you have enough context — do not keep calling tools indefinitely.
+
+For files_to_change URL: https://github.com/${owner}/${repo}/blob/HEAD/{path}
+For reviewer_to_ping: https://github.com/{login}`;
 
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: `Research issue #${issueNumber} in ${owner}/${repo} and call produce_issue_research when done.` },
+    { role: 'user', content: `Research issue #${issueNumber} in ${owner}/${repo}. Follow the strategy and call produce_issue_research when done.` },
   ];
 
-  for (let i = 0; i < 10; i++) {
+  let consecutiveErrors = 0;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    // Warn LLM when getting close to the limit
+    if (i === MAX_ITERATIONS - 3) {
+      messages.push({
+        role: 'user',
+        content: 'You have a few iterations left. Call produce_issue_research now with what you know. Use your best judgment where data is missing.',
+      });
+    }
+
     const res = await fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
@@ -211,7 +247,7 @@ For effort_estimate: 'hours' = a few hours of work, 'days' = 1-3 days, 'week+' =
     messages.push({ role: 'assistant', content: choice.message.content, tool_calls: choice.message.tool_calls });
 
     if (choice.finish_reason === 'stop') {
-      messages.push({ role: 'user', content: 'Call produce_issue_research with your findings.' });
+      messages.push({ role: 'user', content: 'Call produce_issue_research with your findings now.' });
       continue;
     }
 
@@ -220,29 +256,55 @@ For effort_estimate: 'hours' = a few hours of work, 'days' = 1-3 days, 'week+' =
         const name = tc.function.name;
         const args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>;
 
+        emit({ type: 'tool_call', name, args });
+
         if (name === 'produce_issue_research') {
           if (!validateResearch(args)) {
-            throw new Error(`produce_issue_research schema error: ${JSON.stringify(validateResearch.errors)}`);
+            const msg = `produce_issue_research schema error: ${JSON.stringify(validateResearch.errors)}`;
+            emit({ type: 'research_error', message: msg });
+            throw new Error(msg);
           }
           log.info({ owner, repo, issueNumber, iterations: i + 1 }, 'issue research complete');
+          emit({ type: 'research_done' });
           return args as IssueResearch;
         }
 
         let content = '';
+        let success = true;
         try {
           if (name === 'get_issue_full') content = await getIssueFull(owner, repo, args.issue_number as number);
           else if (name === 'search_similar_prs') content = await searchSimilarPrs(owner, repo, args.query as string);
           else if (name === 'get_pr_changed_files') content = await getPrChangedFiles(owner, repo, args.pr_number as number);
           else if (name === 'get_file_content') content = await getFileContent(owner, repo, args.path as string);
-          else content = JSON.stringify({ error: `unknown tool: ${name}` });
+          else { content = JSON.stringify({ error: `unknown tool: ${name}` }); success = false; }
         } catch (err) {
           content = JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+          success = false;
         }
 
+        if (!success) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            messages.push({ role: 'tool', tool_call_id: tc.id, content });
+            messages.push({
+              role: 'user',
+              content: 'Several tools have failed. Call produce_issue_research now with your best assessment. Use "unknown" where data is unavailable.',
+            });
+            emit({ type: 'tool_result', name, success: false, summary: `error: ${JSON.parse(content).error as string}` });
+            consecutiveErrors = 0;
+            break;
+          }
+        } else {
+          consecutiveErrors = 0;
+        }
+
+        emit({ type: 'tool_result', name, success, summary: success ? toolSummary(name, content) : `error: ${(JSON.parse(content) as { error: string }).error}` });
         messages.push({ role: 'tool', tool_call_id: tc.id, content });
       }
     }
   }
 
-  throw new Error('Issue researcher exceeded max iterations');
+  const msg = `Issue researcher exceeded ${MAX_ITERATIONS} iterations`;
+  emit({ type: 'research_error', message: msg });
+  throw new Error(msg);
 }
