@@ -1,6 +1,6 @@
 /**
  * OpenAI-format tool definitions sent to the LLM.
- * Executors live in github.tools.ts and analysis.tools.ts.
+ * Executors live in github.tools.ts.
  */
 
 export const GITHUB_TOOL_DEFINITIONS = [
@@ -16,7 +16,8 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'list_issues',
-      description: 'List open issues. Returns number, title, body snippet, labels, comment count, age.',
+      description:
+        'List open issues. Returns number, title, body snippet, labels, comment count, age. Note which issues have 0 comments (fresh/untouched) or no related PRs (never attempted).',
       parameters: {
         type: 'object',
         properties: {
@@ -30,7 +31,8 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'list_merged_prs',
-      description: 'List recently merged PRs. Returns title, author, reviewers, files changed count, merge time.',
+      description:
+        'List recently merged PRs. Returns title, author, reviewers, merge time. Use to understand contribution patterns and identify who reviews what.',
       parameters: {
         type: 'object',
         properties: {
@@ -44,7 +46,8 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_pr_details',
-      description: 'Get full details for a single PR: files changed, review feedback, body. Use this selectively.',
+      description:
+        'Get full details for a single PR: files changed, review comments, body. Use selectively — at most 2–3 PRs per analysis. Best for understanding review style or file ownership.',
       parameters: {
         type: 'object',
         properties: {
@@ -58,7 +61,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'list_contributors',
-      description: 'List top contributors with commit counts.',
+      description: 'List top contributors with commit counts. Use to build the ownership map.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -66,7 +69,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_file_tree',
-      description: 'Get the repo directory structure (top 3 levels). Useful for understanding project layout.',
+      description: 'Get the repo directory structure (top 3 levels). Use to understand project layout and find key files.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -74,7 +77,8 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_file_content',
-      description: 'Read a specific file (first 6000 chars). Best for: CONTRIBUTING.md, README, key source files.',
+      description:
+        'Read a specific file (first 6000 chars). Best for: CONTRIBUTING.md, README, package.json, key source files referenced in many PRs.',
       parameters: {
         type: 'object',
         properties: {
@@ -88,7 +92,7 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_readme',
-      description: 'Get the repository README content.',
+      description: 'Get the repository README content. Use when you need project context not visible from metadata.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -96,7 +100,8 @@ export const GITHUB_TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'produce_analysis',
-      description: 'Submit your final structured analysis. Call this when you have enough information. This ends the analysis.',
+      description:
+        'Submit your final structured analysis. Call this when you have enough information. This ends the analysis session.',
       parameters: {
         type: 'object',
         required: ['issues', 'architecture', 'health', 'starting_points'],
@@ -104,16 +109,30 @@ export const GITHUB_TOOL_DEFINITIONS = [
         properties: {
           issues: {
             type: 'array',
-            description: 'Ranked open issues by approachability (up to 10)',
+            description: 'Open issues ranked by approachability (up to 10). Higher score = easier to pick up.',
             items: {
               type: 'object',
-              required: ['number', 'title', 'score', 'reason', 'difficulty'],
+              required: ['number', 'title', 'github_url', 'score', 'reason', 'difficulty', 'signals'],
               properties: {
                 number: { type: 'number' },
                 title: { type: 'string' },
-                score: { type: 'number', description: '1 (hardest) to 10 (easiest)' },
-                reason: { type: 'string', description: 'One sentence why this score' },
+                github_url: {
+                  type: 'string',
+                  description: 'https://github.com/{owner}/{repo}/issues/{number}',
+                },
+                score: { type: 'number', description: '1 (hardest) to 10 (easiest to pick up first)' },
+                reason: { type: 'string', description: 'One sentence explaining the score' },
                 difficulty: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
+                signals: {
+                  type: 'object',
+                  required: ['no_comments', 'no_related_prs', 'is_fresh'],
+                  description: 'Factual signals about the issue state',
+                  properties: {
+                    no_comments: { type: 'boolean', description: 'True if the issue has 0 comments' },
+                    no_related_prs: { type: 'boolean', description: 'True if no merged PR references this issue number' },
+                    is_fresh: { type: 'boolean', description: 'True if opened within the last 30 days' },
+                  },
+                },
               },
             },
           },
@@ -121,12 +140,22 @@ export const GITHUB_TOOL_DEFINITIONS = [
             type: 'object',
             required: ['summary', 'key_modules', 'ownership'],
             properties: {
-              summary: { type: 'string', description: 'Plain English description of what this codebase does and how' },
-              key_modules: { type: 'array', items: { type: 'string' }, description: 'Key directories or modules' },
+              summary: {
+                type: 'string',
+                description: 'Plain English: what the codebase does, how it is structured, key abstractions',
+              },
+              key_modules: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Key files or directories (e.g. "lib/index.js", "src/core")',
+              },
               ownership: {
                 type: 'object',
-                description: 'Map of module/dir → contributor logins who own it',
-                additionalProperties: { type: 'array', items: { type: 'string' } },
+                description: 'Map of module/file → array of GitHub profile URLs for contributors who own it',
+                additionalProperties: {
+                  type: 'array',
+                  items: { type: 'string', description: 'https://github.com/{login}' },
+                },
               },
             },
           },
@@ -134,24 +163,31 @@ export const GITHUB_TOOL_DEFINITIONS = [
             type: 'object',
             required: ['summary', 'activity', 'pr_merge_speed', 'contributor_concentration', 'trend'],
             properties: {
-              summary: { type: 'string' },
-              activity: { type: 'string', description: 'high / medium / low' },
-              pr_merge_speed: { type: 'string', description: 'e.g. "avg 2 days"' },
-              contributor_concentration: { type: 'string', description: 'e.g. "high — 2 contributors do 80% of commits"' },
+              summary: { type: 'string', description: 'One paragraph health assessment' },
+              activity: { type: 'string', description: '"high", "medium", or "low" with brief justification' },
+              pr_merge_speed: { type: 'string', description: 'e.g. "avg 2 days", "same day for small fixes"' },
+              contributor_concentration: {
+                type: 'string',
+                description: 'e.g. "high — 2 people do 80% of commits", "well distributed across 8 contributors"',
+              },
               trend: { type: 'string', enum: ['growing', 'stable', 'declining', 'unknown'] },
             },
           },
           starting_points: {
             type: 'array',
-            description: '3–5 files or docs a new contributor should read first',
+            description: '3–5 files or docs a new contributor should read first, ordered by importance',
             minItems: 1,
             maxItems: 5,
             items: {
               type: 'object',
-              required: ['path', 'reason'],
+              required: ['name', 'url', 'reason'],
               properties: {
-                path: { type: 'string' },
-                reason: { type: 'string' },
+                name: { type: 'string', description: 'Display name, e.g. "README.md" or "Core middleware"' },
+                url: {
+                  type: 'string',
+                  description: 'Full GitHub URL: https://github.com/{owner}/{repo}/blob/main/{path}',
+                },
+                reason: { type: 'string', description: 'Why this file matters for a new contributor' },
               },
             },
           },
