@@ -30,17 +30,49 @@ async function ghGet<T = Record<string, unknown>>(path: string): Promise<T> {
 
 type Raw = Record<string, unknown>;
 
+async function getDefaultBranch(owner: string, repo: string): Promise<string> {
+  const data = await ghGet<Raw>(`/repos/${owner}/${repo}`).catch(() => ({ default_branch: 'main' }));
+  return (data.default_branch as string | null) ?? 'main';
+}
+
 async function getIssueFull(owner: string, repo: string, issueNumber: number): Promise<string> {
-  const [issue, comments] = await Promise.all([
+  const [issue, comments, timeline] = await Promise.all([
     ghGet<Raw>(`/repos/${owner}/${repo}/issues/${issueNumber}`),
     ghGet<Raw[]>(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`),
+    ghGet<Raw[]>(`/repos/${owner}/${repo}/issues/${issueNumber}/timeline?per_page=100`).catch(() => []),
   ]);
+
   const body = (issue.body as string | null)?.slice(0, 2000) ?? '';
   const commentText = (comments as Raw[])
     .slice(0, 10)
     .map((c) => `@${(c.user as Raw | null)?.login ?? 'unknown'}: ${(c.body as string | null)?.slice(0, 400) ?? ''}`)
     .join('\n');
-  return JSON.stringify({ title: issue.title, body, labels: issue.labels, comments: commentText });
+
+  // Extract linked PRs from timeline cross-reference events
+  const linkedPrs = (timeline as Raw[])
+    .filter((e) => e.event === 'cross-referenced')
+    .map((e) => {
+      const src = e.source as Raw | null;
+      const srcIssue = src?.issue as Raw | null;
+      if (!srcIssue?.pull_request) return null;
+      const pr = srcIssue.pull_request as Raw;
+      return {
+        number: srcIssue.number,
+        title: srcIssue.title,
+        state: srcIssue.state,
+        merged: !!(pr.merged_at),
+        url: pr.html_url ?? `https://github.com/${owner}/${repo}/pull/${srcIssue.number as number}`,
+      };
+    })
+    .filter(Boolean);
+
+  return JSON.stringify({
+    title: issue.title,
+    body,
+    labels: (issue.labels as Raw[]).map((l) => l.name),
+    comments: commentText,
+    linked_prs: linkedPrs,
+  });
 }
 
 async function searchSimilarPrs(owner: string, repo: string, query: string): Promise<string> {
@@ -201,21 +233,24 @@ export async function runIssueResearcherAgent(
   log.info({ owner, repo, issueNumber }, 'issue researcher agent started');
   emit({ type: 'research_started', owner, repo, issueNumber });
 
+  const defaultBranch = await getDefaultBranch(owner, repo);
+
   const systemPrompt = `You are a deep issue researcher for the GitHub repo ${owner}/${repo}.
 
 Your task: research issue #${issueNumber} and produce a concrete guide for a new contributor.
 
 Strategy (follow in order, don't skip steps):
-1. Call get_issue_full to read the issue and discussion.
+1. Call get_issue_full to read the issue, its discussion, AND its linked_prs field which shows PRs already linked to this issue.
 2. Call search_similar_prs with 2-3 keywords from the issue title to find related merged PRs.
 3. Call get_pr_changed_files on the most relevant PR to see which files were changed.
-4. Optionally call get_file_content on 1-2 key files to understand the code structure.
+4. Optionally call get_file_content on 1-2 key source files (not changelog/yaml config files) to understand the code.
 5. Call produce_issue_research with your findings.
 
-Important: call produce_issue_research as soon as you have enough context — do not keep calling tools indefinitely.
-
-For files_to_change URL: https://github.com/${owner}/${repo}/blob/HEAD/{path}
-For reviewer_to_ping: use the GitHub profile URL of a specific individual contributor (not the org). Pick the person who authored or reviewed the most similar merged PRs: https://github.com/{login}`;
+Important:
+- Call produce_issue_research as soon as you have enough context — do not keep calling tools indefinitely.
+- The issue's linked_prs from get_issue_full shows PRs that are directly linked — if any are merged, use them as similar_prs.
+- For files_to_change URL: always use https://github.com/${owner}/${repo}/blob/${defaultBranch}/{path} — NEVER use a commit SHA in the URL.
+- For reviewer_to_ping: pick a specific individual contributor (not the org account). Use the author or reviewer of the most relevant merged PR: https://github.com/{login}`;
 
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
