@@ -8,7 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql   # PG18 expects mount at /var/lib/postgresql, not /data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U beacon"]
       interval: 5s
@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql://beacon:beacon@db:5432/beacon
       PORT: 3001
+      NODE_ENV: production
     env_file:
       - .env
     depends_on:
