@@ -8,12 +8,16 @@ const GITHUB_API = 'https://api.github.com';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Raw = Record<string, any>;
 
+/** Only attach auth header if the token looks real (not a placeholder). */
 function buildHeaders(): Record<string, string> {
   const h: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'beacon-app',
   };
-  if (process.env.GITHUB_TOKEN) h['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const token = process.env.GITHUB_TOKEN;
+  if (token && token.startsWith('gh')) {
+    h['Authorization'] = `Bearer ${token}`;
+  }
   return h;
 }
 
