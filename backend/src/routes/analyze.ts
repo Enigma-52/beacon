@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { upsertRepo, findRepoById } from '../dao/repos';
+import { upsertRepo, findRepoById, findRepoByUrl } from '../dao/repos';
 import { findReportByRepoId } from '../dao/reports';
 import { isValidGitHubUrl } from '../utils/validation';
 import { processRepo } from '../services/processor';
@@ -21,6 +21,18 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
   }
 
   try {
+    // Return cached analysis if done within last 24h
+    const existing = await findRepoByUrl(url);
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+    if (
+      existing &&
+      existing.status === 'done' &&
+      Date.now() - new Date(existing.updated_at).getTime() < CACHE_TTL_MS
+    ) {
+      res.json({ id: existing.id, status: 'done', cached: true });
+      return;
+    }
+
     const repo = await upsertRepo(url);
     res.json({ id: repo.id, status: repo.status });
 

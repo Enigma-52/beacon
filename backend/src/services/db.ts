@@ -11,7 +11,8 @@ export async function initDb(): Promise<void> {
       url         TEXT UNIQUE NOT NULL,
       github_data JSONB,
       status      TEXT DEFAULT 'pending',
-      created_at  TIMESTAMPTZ DEFAULT NOW()
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS reports (
@@ -20,5 +21,16 @@ export async function initDb(): Promise<void> {
       analysis    JSONB,
       created_at  TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS issue_research (
+      id           SERIAL PRIMARY KEY,
+      repo_id      INT REFERENCES repos(id),
+      issue_number INT NOT NULL,
+      research     JSONB NOT NULL,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (repo_id, issue_number)
+    );
+
+    ALTER TABLE repos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `);
 }

@@ -4,6 +4,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { WebSocketServer } from 'ws';
 import { analyzeRouter } from './routes/analyze';
+import { feedRouter } from './routes/feed';
+import { researchRouter } from './routes/research';
+import { matchRouter } from './routes/match';
 import { initDb } from './services/db';
 import { eventBus } from './services/event-bus';
 import { log } from './services/logger';
@@ -21,6 +24,9 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/', analyzeRouter);
+app.use('/', feedRouter);
+app.use('/', researchRouter);
+app.use('/', matchRouter);
 
 const httpServer = http.createServer(app);
 
