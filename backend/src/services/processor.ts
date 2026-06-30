@@ -1,25 +1,32 @@
 import { updateRepoStatus, updateRepoGithubData } from '../dao/repos';
 import { insertReport } from '../dao/reports';
-import { fetchGitHubData } from './github';
-import { analyzeWithOpenRouter } from './openrouter';
+import { runAnalysisAgent } from '../agents/analysis.agent';
+import { parseGitHubUrl } from '../utils/validation';
 import { log } from './logger';
 
 export async function processRepo(id: number, url: string): Promise<void> {
-  log.info({ repoId: id, url }, 'processor started');
+  const parsed = parseGitHubUrl(url);
+  if (!parsed) throw new Error('invalid GitHub URL');
+
+  const { owner, repo } = parsed;
+  log.info({ repoId: id, owner, repo }, 'processor started');
 
   try {
-    log.info({ repoId: id }, 'step 1/3 — fetching GitHub data');
+    // Mark as fetching — the agent will call GitHub tools during analysis
     await updateRepoStatus(id, 'fetching');
-    const githubData = await fetchGitHubData(url);
-    await updateRepoGithubData(id, githubData);
 
-    log.info({ repoId: id }, 'step 2/3 — running AI analysis');
+    // Store a placeholder so GET /report/:id returns something while in progress
+    await updateRepoGithubData(id, { owner, repo, fetched_at: new Date().toISOString() });
+
+    log.info({ repoId: id }, 'starting analysis agent');
     await updateRepoStatus(id, 'analyzing');
-    const analysis = await analyzeWithOpenRouter(githubData);
-    await insertReport(id, analysis);
 
-    log.info({ repoId: id }, 'step 3/3 — done');
+    const analysis = await runAnalysisAgent(owner, repo);
+
+    await insertReport(id, analysis);
     await updateRepoStatus(id, 'done');
+
+    log.info({ repoId: id }, 'processor complete');
   } catch (err) {
     log.error({ repoId: id, err }, 'processor failed');
     await updateRepoStatus(id, 'error').catch(() => {});
