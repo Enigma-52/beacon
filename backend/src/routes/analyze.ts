@@ -3,6 +3,7 @@ import { upsertRepo, findRepoById } from '../dao/repos';
 import { findReportByRepoId } from '../dao/reports';
 import { isValidGitHubUrl } from '../utils/validation';
 import { processRepo } from '../services/processor';
+import { cancellation } from '../services/cancellation';
 
 export const analyzeRouter = Router();
 
@@ -23,7 +24,6 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
     const repo = await upsertRepo(url);
     res.json({ id: repo.id, status: repo.status });
 
-    // fire-and-forget — runs after response is sent
     processRepo(repo.id, url).catch((err) =>
       console.error('[analyze] unhandled processRepo error:', err)
     );
@@ -31,6 +31,18 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
     console.error(err);
     res.status(500).json({ error: 'internal server error' });
   }
+});
+
+analyzeRouter.post('/cancel/:id', (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'invalid id' });
+    return;
+  }
+
+  const cancelled = cancellation.cancel(id);
+  res.json({ cancelled });
 });
 
 analyzeRouter.get('/report/:id', async (req: Request, res: Response) => {
@@ -50,7 +62,6 @@ analyzeRouter.get('/report/:id', async (req: Request, res: Response) => {
     }
 
     const report = await findReportByRepoId(id);
-
     res.json({ ...repo, analysis: report?.analysis ?? null });
   } catch (err) {
     console.error(err);
