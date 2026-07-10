@@ -33,6 +33,7 @@ export interface FeedRepo {
   stars: number | null;
   last_analyzed: string;
   top_issues: RankedIssue[];
+  researched_issues?: number[];
 }
 
 export interface FeedResponse {

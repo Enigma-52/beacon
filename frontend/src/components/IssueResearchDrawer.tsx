@@ -82,6 +82,15 @@ export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props)
     return () => { wsRef.current?.close(); };
   }, []);
 
+  // Esc closes the drawer
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   async function handleResearch() {
     setRunning(true);
     setError(null);

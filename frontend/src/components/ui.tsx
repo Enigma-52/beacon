@@ -98,11 +98,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.tone}`}>{t.text}</div>
+          <div
+            key={t.id}
+            className={`toast toast-${t.tone}`}
+            title="Dismiss"
+            onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+          >
+            {t.text}
+          </div>
         ))}
       </div>
     </ToastContext.Provider>
   );
+}
+
+// ─── Formatting helpers ────────────────────────────────────────────────
+
+export function compactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
 }
 
 // ─── Time helper ───────────────────────────────────────────────────────

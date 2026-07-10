@@ -6,7 +6,7 @@ import type { FeedRepo, FeedResponse } from '../types';
 import type { RankedIssue } from '../analysisTypes';
 import { IssueResearchDrawer } from '../components/IssueResearchDrawer';
 import { Nav } from '../components/Nav';
-import { ScoreRing, DifficultyChip, RepoCardSkeleton, timeAgo } from '../components/ui';
+import { ScoreRing, DifficultyChip, RepoCardSkeleton, timeAgo, compactNumber } from '../components/ui';
 import { useBookmarks, toggleBookmark, isBookmarked } from '../lib/bookmarks';
 
 type SortKey = 'recent' | 'stars' | 'issues';
@@ -280,7 +280,7 @@ function RepoCard({
           )}
           <div className="repo-meta">
             {repo.language && <span>lang <strong>{repo.language}</strong></span>}
-            {repo.stars != null && <span>★ <strong>{repo.stars.toLocaleString()}</strong></span>}
+            {repo.stars != null && <span>★ <strong>{compactNumber(repo.stars)}</strong></span>}
             <span>analyzed <strong>{timeAgo(repo.last_analyzed)}</strong></span>
           </div>
         </div>
@@ -306,6 +306,9 @@ function RepoCard({
                 </a>
               </div>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                {repo.researched_issues?.includes(issue.number) && (
+                  <span className="chip chip-sea" title="Deep research available — click to view">✓ researched</span>
+                )}
                 <DifficultyChip difficulty={issue.difficulty} />
                 {issue.signals?.no_comments && <Dot color="var(--ok)" title="No comments" />}
                 {issue.signals?.is_fresh && <Dot color="var(--warn)" title="Fresh" />}

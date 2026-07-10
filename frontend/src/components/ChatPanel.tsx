@@ -24,6 +24,24 @@ const STARTERS = [
   'Who should review my PR?',
 ];
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="chat-copy"
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      aria-label="Copy answer"
+    >
+      {copied ? 'copied' : 'copy'}
+    </button>
+  );
+}
+
 export function ChatPanel({ repoId }: { repoId: number }) {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [followups, setFollowups] = useState<string[]>(STARTERS);
@@ -101,7 +119,12 @@ export function ChatPanel({ repoId }: { repoId: number }) {
         <div className="chat-messages">
           {bubbles.map((b, i) => (
             <div key={i} className={`chat-bubble ${b.role}${b.streaming ? ' streaming' : ''}`}>
-              {b.role === 'assistant' ? <MarkdownLite text={b.content} /> : b.content}
+              {b.role === 'assistant' ? (
+                <>
+                  {!b.streaming && b.content && <CopyButton text={b.content} />}
+                  <MarkdownLite text={b.content} />
+                </>
+              ) : b.content}
             </div>
           ))}
           <div ref={bottomRef} />

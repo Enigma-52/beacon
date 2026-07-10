@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { SearchBar } from './components/SearchBar';
 import { ReportTabs } from './components/ReportTabs';
 import { AgentLog } from './components/AgentLog';
@@ -14,10 +14,19 @@ import { FeedPage } from './pages/FeedPage';
 import { MatchPage } from './pages/MatchPage';
 import type { RepoReport } from './types';
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <CommandPalette />
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<FeedPage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
