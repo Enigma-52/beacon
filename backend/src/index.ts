@@ -9,10 +9,12 @@ import { researchRouter } from './routes/research';
 import { matchRouter } from './routes/match';
 import { askRouter } from './routes/ask';
 import { statsRouter } from './routes/stats';
+import { discoverRouter } from './routes/discover';
+import { compareRouter } from './routes/compare';
 import { initDb, closeDb, pool } from './services/db';
 import { eventBus } from './services/event-bus';
 import { rateLimit } from './middleware/rate-limit';
-import { errorHandler } from './middleware/errors';
+import { errorHandler, requestLogger } from './middleware/errors';
 import { log } from './services/logger';
 
 dotenv.config();
@@ -22,6 +24,7 @@ const PORT = process.env.PORT ?? 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
+app.use(requestLogger);
 
 app.get('/health', async (_req, res) => {
   const db = await pool.query('SELECT 1').then(() => true).catch(() => false);
@@ -29,7 +32,8 @@ app.get('/health', async (_req, res) => {
 });
 
 const limiter = rateLimit();
-app.post(['/analyze', '/match', '/ask', '/research/:repoId/:issueNumber'], limiter);
+app.post(['/analyze', '/match', '/ask', '/compare', '/research/:repoId/:issueNumber'], limiter);
+app.get('/gh-search', limiter);
 
 app.use('/', analyzeRouter);
 app.use('/', feedRouter);
@@ -37,6 +41,8 @@ app.use('/', researchRouter);
 app.use('/', matchRouter);
 app.use('/', askRouter);
 app.use('/', statsRouter);
+app.use('/', discoverRouter);
+app.use('/', compareRouter);
 
 app.use(errorHandler);
 

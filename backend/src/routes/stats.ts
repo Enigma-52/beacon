@@ -21,16 +21,23 @@ statsRouter.get(
         (SELECT COALESCE(SUM(jsonb_array_length(analysis->'issues')), 0)
            FROM reports WHERE analysis ? 'issues')                                  AS issues_ranked,
         (SELECT COUNT(*) FROM issue_research)                                       AS research_runs,
-        (SELECT SUM((meta->>'total_tokens')::bigint) FROM reports WHERE meta IS NOT NULL) AS total_tokens
+        (SELECT SUM((meta->>'total_tokens')::bigint) FROM reports WHERE meta IS NOT NULL) AS total_tokens,
+        (SELECT ROUND(AVG((meta->>'total_tokens')::bigint)) FROM reports WHERE meta IS NOT NULL) AS avg_tokens_per_run,
+        (SELECT MAX(updated_at) FROM repos WHERE status = 'done')                   AS last_analyzed
     `);
 
-    const row = result.rows[0];
+    const row = result.rows[0] as typeof result.rows[0] & {
+      avg_tokens_per_run: string | null;
+      last_analyzed: Date | null;
+    };
     res.json({
       repos: Number(row.repos),
       reports: Number(row.reports),
       issues_ranked: Number(row.issues_ranked),
       research_runs: Number(row.research_runs),
       total_tokens: row.total_tokens ? Number(row.total_tokens) : 0,
+      avg_tokens_per_run: row.avg_tokens_per_run ? Number(row.avg_tokens_per_run) : 0,
+      last_analyzed: row.last_analyzed,
     });
   })
 );

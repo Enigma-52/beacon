@@ -40,6 +40,21 @@ export async function insertReport(
   return result.rows[0];
 }
 
+export interface ReportSummary {
+  id: number;
+  meta: ReportMeta | null;
+  created_at: Date;
+}
+
+/** Analysis history for a repo — meta only, newest first. */
+export async function listReportsByRepo(repo_id: number): Promise<ReportSummary[]> {
+  const result = await pool.query<ReportSummary>(
+    'SELECT id, meta, created_at FROM reports WHERE repo_id = $1 ORDER BY created_at DESC LIMIT 20',
+    [repo_id]
+  );
+  return result.rows;
+}
+
 export async function updateReport(id: number, analysis: Report['analysis']): Promise<void> {
   await pool.query('UPDATE reports SET analysis = $2 WHERE id = $1', [id, JSON.stringify(analysis)]);
 }

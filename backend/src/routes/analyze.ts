@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { upsertRepo, findRepoById, findRepoByUrl } from '../dao/repos';
-import { findReportByRepoId } from '../dao/reports';
+import { findReportByRepoId, listReportsByRepo } from '../dao/reports';
+import { asyncRoute } from '../middleware/errors';
 import { isValidGitHubUrl } from '../utils/validation';
 import { processRepo } from '../services/processor';
 import { cancellation } from '../services/cancellation';
@@ -63,6 +64,17 @@ analyzeRouter.post('/cancel/:id', (req: Request, res: Response) => {
   const cancelled = cancellation.cancel(id);
   res.json({ cancelled });
 });
+
+/** Analysis history — when it was re-analyzed and what each run cost. */
+analyzeRouter.get(
+  '/repos/:id/reports',
+  asyncRoute(async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) { res.status(400).json({ error: 'invalid id' }); return; }
+    const reports = await listReportsByRepo(id);
+    res.json({ reports });
+  })
+);
 
 analyzeRouter.get('/report/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
