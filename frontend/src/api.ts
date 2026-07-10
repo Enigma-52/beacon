@@ -2,11 +2,11 @@ import type { RepoReport, FeedResponse, IssueResearchResponse, MatchResponse } f
 
 const BASE = '/api';
 
-export async function analyzeRepo(url: string): Promise<{ id: number; status: string }> {
+export async function analyzeRepo(url: string, force = false): Promise<{ id: number; status: string }> {
   const res = await fetch(`${BASE}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, force }),
   });
 
   if (!res.ok) {

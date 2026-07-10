@@ -7,6 +7,7 @@ import type { RankedIssue } from '../analysisTypes';
 import { IssueResearchDrawer } from '../components/IssueResearchDrawer';
 import { Nav } from '../components/Nav';
 import { ScoreRing, DifficultyChip, RepoCardSkeleton, timeAgo } from '../components/ui';
+import { useBookmarks, toggleBookmark, isBookmarked } from '../lib/bookmarks';
 
 type SortKey = 'recent' | 'stars' | 'issues';
 
@@ -78,9 +79,14 @@ export function FeedPage() {
     <div className="page-shell">
       <Nav
         right={
-          <button className="btn btn-primary" onClick={() => navigate('/analyze')}>
-            + Add repo
-          </button>
+          <span style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' }}>
+            <button className="btn btn-ghost" onClick={() => navigate('/match')}>
+              Find my issue
+            </button>
+            <button className="btn btn-primary" onClick={() => navigate('/analyze')}>
+              + Add repo
+            </button>
+          </span>
         }
       />
 
@@ -102,6 +108,8 @@ export function FeedPage() {
               </button>
             );
           })}
+
+          <BookmarksSection />
 
           <div style={{ marginTop: 'var(--sp-6)' }}>
             <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>Keys</p>
@@ -199,6 +207,39 @@ export function FeedPage() {
   );
 }
 
+function BookmarksSection() {
+  const bookmarks = useBookmarks();
+  if (!bookmarks.length) return null;
+  return (
+    <div style={{ marginTop: 'var(--sp-6)' }}>
+      <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>Bookmarks</p>
+      {bookmarks.map((b) => (
+        <div key={`${b.repoId}-${b.number}`} style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 6 }}>
+          <button
+            onClick={() => toggleBookmark(b)}
+            title="Remove bookmark"
+            style={{ background: 'none', border: 'none', color: 'var(--beacon)', padding: 0, fontSize: 12 }}
+          >
+            ★
+          </button>
+          <a
+            href={b.github_url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontSize: 'var(--text-xs)', color: 'var(--muted)', overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+            }}
+            title={`${b.repoName} #${b.number} ${b.title}`}
+          >
+            #{b.number} {b.title}
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
@@ -268,6 +309,7 @@ function RepoCard({
                 <DifficultyChip difficulty={issue.difficulty} />
                 {issue.signals?.no_comments && <Dot color="var(--ok)" title="No comments" />}
                 {issue.signals?.is_fresh && <Dot color="var(--warn)" title="Fresh" />}
+                <BookmarkStar repo={repo} issue={issue} />
                 <span className="research-hint">deep research →</span>
               </div>
             </div>
@@ -275,6 +317,34 @@ function RepoCard({
         </div>
       )}
     </div>
+  );
+}
+
+function BookmarkStar({ repo, issue }: { repo: FeedRepo; issue: RankedIssue }) {
+  const bookmarks = useBookmarks();
+  void bookmarks; // subscribe so the star re-renders on toggle
+  const saved = isBookmarked(repo.id, issue.number);
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleBookmark({
+          repoId: repo.id,
+          repoName: repo.name,
+          number: issue.number,
+          title: issue.title,
+          github_url: issue.github_url,
+        });
+      }}
+      title={saved ? 'Remove bookmark' : 'Bookmark this issue'}
+      aria-label={saved ? 'Remove bookmark' : 'Bookmark this issue'}
+      style={{
+        background: 'none', border: 'none', padding: '0 2px', fontSize: 13,
+        color: saved ? 'var(--beacon)' : 'var(--muted-2)',
+      }}
+    >
+      {saved ? '★' : '☆'}
+    </button>
   );
 }
 

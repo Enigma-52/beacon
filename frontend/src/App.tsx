@@ -1,22 +1,27 @@
 import { useRef, useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { SearchBar } from './components/SearchBar';
 import { ReportTabs } from './components/ReportTabs';
 import { AgentLog } from './components/AgentLog';
 import { ChatPanel } from './components/ChatPanel';
+import { CommandPalette } from './components/CommandPalette';
 import { Nav } from './components/Nav';
 import { ToastProvider, useToast, Skeleton } from './components/ui';
 import { useAgentStream } from './hooks/useAgentStream';
 import { analyzeRepo, getReport, cancelAnalysis } from './api';
+import { downloadMarkdown } from './lib/exportReport';
 import { FeedPage } from './pages/FeedPage';
+import { MatchPage } from './pages/MatchPage';
 import type { RepoReport } from './types';
 
 export default function App() {
   return (
     <ToastProvider>
+      <CommandPalette />
       <Routes>
         <Route path="/" element={<FeedPage />} />
         <Route path="/analyze" element={<AnalyzePage />} />
+        <Route path="/match" element={<MatchPage />} />
         <Route path="/r/:id" element={<RepoDetailPage />} />
       </Routes>
     </ToastProvider>
@@ -31,8 +36,20 @@ function AnalyzePage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
   const toast = useToast();
+  const [params] = useSearchParams();
+  const autoStarted = useRef(false);
 
   const agentEvents = useAgentStream(repoId);
+
+  // /analyze?url=…&force=1 starts immediately (used by the re-analyze button)
+  useEffect(() => {
+    const url = params.get('url');
+    if (url && !autoStarted.current) {
+      autoStarted.current = true;
+      void handleAnalyze(url, params.get('force') === '1');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   function stopPolling() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -55,7 +72,7 @@ function AnalyzePage() {
 
   useEffect(() => stopPolling, []);
 
-  async function handleAnalyze(url: string) {
+  async function handleAnalyze(url: string, force = false) {
     stopPolling();
     setLoading(true);
     setError(null);
@@ -63,7 +80,7 @@ function AnalyzePage() {
     setRepoId(null);
 
     try {
-      const { id, cached } = await analyzeRepo(url) as { id: number; status: string; cached?: boolean };
+      const { id, cached } = await analyzeRepo(url, force) as { id: number; status: string; cached?: boolean };
       setRepoId(id);
       if (cached) {
         toast('info', 'Analyzed recently — showing cached report');
@@ -142,6 +159,7 @@ function AnalyzePage() {
 function RepoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const toast = useToast();
   const [report, setReport] = useState<RepoReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,9 +174,30 @@ function RepoDetailPage() {
 
   const repoId = id ? parseInt(id, 10) : null;
 
+  function share() {
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => toast('ok', 'Link copied'))
+      .catch(() => toast('error', 'Copy failed'));
+  }
+
   return (
     <div className="page-shell">
-      <Nav />
+      <Nav
+        right={
+          report ? (
+            <span style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+              <button className="btn btn-ghost" onClick={share}>Share</button>
+              <button className="btn btn-ghost" onClick={() => downloadMarkdown(report)}>Export .md</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => navigate(`/analyze?url=${encodeURIComponent(report.url)}&force=1`)}
+              >
+                Re-analyze
+              </button>
+            </span>
+          ) : undefined
+        }
+      />
       <main className="page-main">
         <button className="back-link" onClick={() => navigate('/')}>← back to feed</button>
 

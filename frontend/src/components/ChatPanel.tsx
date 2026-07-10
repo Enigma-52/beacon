@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { askQuestion, getConversation } from '../api';
 import type { ConversationTurn } from '../api';
+import { MarkdownLite } from '../lib/markdown';
 
 function sessionId(): string {
   let id = localStorage.getItem('beacon_session');
@@ -100,7 +101,7 @@ export function ChatPanel({ repoId }: { repoId: number }) {
         <div className="chat-messages">
           {bubbles.map((b, i) => (
             <div key={i} className={`chat-bubble ${b.role}${b.streaming ? ' streaming' : ''}`}>
-              {b.content}
+              {b.role === 'assistant' ? <MarkdownLite text={b.content} /> : b.content}
             </div>
           ))}
           <div ref={bottomRef} />
