@@ -3,6 +3,8 @@
  * Tools are pre-bound to a specific owner/repo — the agent doesn't need to re-specify them.
  */
 
+import { fetchWithRetry } from '../services/http';
+
 const GITHUB_API = 'https://api.github.com';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,7 +24,7 @@ function buildHeaders(): Record<string, string> {
 }
 
 async function ghGet<T = Raw>(path: string): Promise<T> {
-  const res = await fetch(`${GITHUB_API}${path}`, { headers: buildHeaders() });
+  const res = await fetchWithRetry(`${GITHUB_API}${path}`, { headers: buildHeaders() }, { retries: 2, timeoutMs: 15_000 });
   if (!res.ok) throw new Error(`GitHub ${path} → ${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }

@@ -1,5 +1,6 @@
 import type { GithubData, GithubIssue, GithubPR, Contributor } from '../schemas';
 import { parseGitHubUrl } from '../utils/validation';
+import { fetchWithRetry } from './http';
 import { log } from './logger';
 
 const GITHUB_API = 'https://api.github.com';
@@ -16,7 +17,7 @@ function headers(): Record<string, string> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${GITHUB_API}${path}`, { headers: headers() });
+  const res = await fetchWithRetry(`${GITHUB_API}${path}`, { headers: headers() }, { retries: 2, timeoutMs: 15_000 });
   if (!res.ok) {
     throw new Error(`GitHub API ${path} → ${res.status} ${res.statusText}`);
   }
