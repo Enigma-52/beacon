@@ -5,6 +5,7 @@ import { ReportTabs } from './components/ReportTabs';
 import { AgentLog } from './components/AgentLog';
 import { ChatPanel } from './components/ChatPanel';
 import { CommandPalette } from './components/CommandPalette';
+import { DiscoverPanel } from './components/DiscoverPanel';
 import { Nav } from './components/Nav';
 import { ToastProvider, useToast, Skeleton } from './components/ui';
 import { useAgentStream } from './hooks/useAgentStream';
@@ -134,6 +135,8 @@ function AnalyzePage() {
         <SearchBar onSubmit={handleAnalyze} loading={loading} />
 
         {error && <div className="error-banner">{error}</div>}
+
+        {showHero && <DiscoverPanel onAnalyze={handleAnalyze} disabled={loading} />}
 
         {loading && !agentEvents.length && (
           <p style={{ marginTop: 'var(--sp-5)', color: 'var(--muted)', textAlign: 'center' }}>

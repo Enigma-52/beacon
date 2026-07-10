@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getFeed, getStats } from '../api';
-import type { PlatformStats } from '../api';
+import { getFeed, getStats, compareRepos } from '../api';
+import type { PlatformStats, CompareVerdict } from '../api';
 import type { FeedRepo, FeedResponse } from '../types';
 import type { RankedIssue } from '../analysisTypes';
 import { IssueResearchDrawer } from '../components/IssueResearchDrawer';
@@ -10,6 +10,7 @@ import { ScoreRing, DifficultyChip, RepoCardSkeleton, timeAgo, compactNumber } f
 import { useBookmarks, toggleBookmark, isBookmarked } from '../lib/bookmarks';
 
 type SortKey = 'recent' | 'stars' | 'issues';
+type DifficultyFilter = 'all' | 'beginner' | 'intermediate' | 'advanced';
 
 export function FeedPage() {
   const [feed, setFeed] = useState<FeedResponse | null>(null);
@@ -19,6 +20,10 @@ export function FeedPage() {
   const [selectedLang, setSelectedLang] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('recent');
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [comparison, setComparison] = useState<CompareVerdict | null>(null);
+  const [comparing, setComparing] = useState(false);
   const [focusIdx, setFocusIdx] = useState(-1);
   const [researchTarget, setResearchTarget] = useState<{ repoId: number; issue: RankedIssue; repoName: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -41,11 +46,34 @@ export function FeedPage() {
         (r) => r.name.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q)
       );
     }
+    if (difficulty !== 'all') {
+      rows = rows
+        .map((r) => ({ ...r, top_issues: r.top_issues.filter((i) => i.difficulty === difficulty) }))
+        .filter((r) => r.top_issues.length > 0);
+    }
     const sorted = [...rows];
     if (sort === 'stars') sorted.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
     else if (sort === 'issues') sorted.sort((a, b) => b.top_issues.length - a.top_issues.length);
     return sorted;
-  }, [feed, selectedLang, query, sort]);
+  }, [feed, selectedLang, query, sort, difficulty]);
+
+  function toggleCompare(id: number) {
+    setCompareIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 3 ? [...prev, id] : prev
+    );
+  }
+
+  async function runCompare() {
+    if (compareIds.length < 2 || comparing) return;
+    setComparing(true);
+    try {
+      setComparison(await compareRepos(compareIds));
+    } catch {
+      setComparison(null);
+    } finally {
+      setComparing(false);
+    }
+  }
 
   // Keyboard navigation: / focus search, j/k move, enter open, r research
   useEffect(() => {
@@ -154,6 +182,18 @@ export function FeedPage() {
               <option value="stars">Most stars</option>
               <option value="issues">Most open picks</option>
             </select>
+            <select
+              className="input"
+              style={{ width: 'auto', flex: 'none' }}
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value as DifficultyFilter)}
+              aria-label="Filter by difficulty"
+            >
+              <option value="all">Any difficulty</option>
+              <option value="beginner">Beginner only</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
           </div>
 
           {loading && (
@@ -187,6 +227,8 @@ export function FeedPage() {
                 key={repo.id}
                 repo={repo}
                 focused={idx === focusIdx}
+                compareSelected={compareIds.includes(repo.id)}
+                onToggleCompare={() => toggleCompare(repo.id)}
                 onOpenRepo={() => navigate(`/r/${repo.id}`)}
                 onResearchIssue={(issue) => setResearchTarget({ repoId: repo.id, issue, repoName: repo.name })}
               />
@@ -194,6 +236,26 @@ export function FeedPage() {
           </div>
         </main>
       </div>
+
+      {compareIds.length >= 2 && !comparison && (
+        <div className="compare-bar rise-in">
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+            {compareIds.length} repos selected
+          </span>
+          <button className="btn btn-primary" onClick={runCompare} disabled={comparing}>
+            {comparing ? 'Comparing…' : 'Compare'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => setCompareIds([])}>Clear</button>
+        </div>
+      )}
+
+      {comparison && (
+        <CompareResult
+          comparison={comparison}
+          repos={feed?.repos ?? []}
+          onClose={() => { setComparison(null); setCompareIds([]); }}
+        />
+      )}
 
       {researchTarget && (
         <IssueResearchDrawer
@@ -246,14 +308,66 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function CompareResult({
+  comparison,
+  repos,
+  onClose,
+}: {
+  comparison: CompareVerdict;
+  repos: FeedRepo[];
+  onClose: () => void;
+}) {
+  const nameOf = (id: number) => repos.find((r) => r.id === id)?.name ?? `repo ${id}`;
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-label="Comparison result"
+        className="rise-in"
+        style={{
+          position: 'fixed', top: '14vh', left: '50%', transform: 'translateX(-50%)',
+          width: 'min(620px, 92vw)', zIndex: 60, background: 'var(--bg-raised)',
+          border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+          boxShadow: 'var(--shadow-2)', padding: 'var(--sp-5)', maxHeight: '70vh', overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
+          <span className="eyebrow">Where to contribute first</span>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 16 }}>✕</button>
+        </div>
+        <p style={{ fontSize: 'var(--text-lg)', fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--beacon)', marginBottom: 'var(--sp-2)' }}>
+          {nameOf(comparison.winner_repo_id)}
+        </p>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', lineHeight: 1.7, marginBottom: 'var(--sp-4)' }}>
+          {comparison.reasoning}
+        </p>
+        {comparison.per_repo.map((r) => (
+          <div key={r.repo_id} className="card" style={{ padding: 'var(--sp-3) var(--sp-4)' }}>
+            <p style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 2 }}>{nameOf(r.repo_id)}</p>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', margin: 0 }}>{r.verdict}</p>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--muted-2)', margin: '4px 0 0', fontFamily: 'var(--font-mono)' }}>
+              best for: {r.best_for}
+            </p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function RepoCard({
   repo,
   focused,
+  compareSelected,
+  onToggleCompare,
   onOpenRepo,
   onResearchIssue,
 }: {
   repo: FeedRepo;
   focused: boolean;
+  compareSelected: boolean;
+  onToggleCompare: () => void;
   onOpenRepo: () => void;
   onResearchIssue: (issue: RankedIssue) => void;
 }) {
@@ -284,8 +398,18 @@ function RepoCard({
             <span>analyzed <strong>{timeAgo(repo.last_analyzed)}</strong></span>
           </div>
         </div>
-        <span style={{ color: 'var(--muted-2)', fontSize: 'var(--text-xs)', marginTop: '2px' }} aria-hidden="true">
-          {expanded ? '▲' : '▼'}
+        <span style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexShrink: 0 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleCompare(); }}
+            className={`chip ${compareSelected ? 'chip-warn' : 'chip-muted'}`}
+            style={{ cursor: 'pointer' }}
+            title="Select for comparison"
+          >
+            {compareSelected ? 'comparing' : 'compare'}
+          </button>
+          <span style={{ color: 'var(--muted-2)', fontSize: 'var(--text-xs)' }} aria-hidden="true">
+            {expanded ? '▲' : '▼'}
+          </span>
         </span>
       </div>
 

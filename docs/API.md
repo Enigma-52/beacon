@@ -98,6 +98,27 @@ Research shape: `{ summary, approach, files_to_change: [{path, reason, url}], si
 
 Ranks issues across every tracked repo against the profile.
 
+## Discovery & comparison
+
+### `GET /gh-search?q=terminal+rust`
+
+Search GitHub for repos to analyze (proxied, cached 5 min per query):
+`{ "results": [{ "full_name", "description", "language", "stars", "url" }], "cached": false }`
+
+### `POST /compare`
+
+Compare 2–3 analyzed repos with one cheap completion over their stored analyses:
+
+```json
+{ "repo_ids": [1, 4] }
+```
+
+→ `{ "comparison": { "winner_repo_id", "reasoning", "per_repo": [{ "repo_id", "verdict", "best_for" }] } }`
+
+### `GET /repos/:id/reports`
+
+Analysis history for a repo — `{ "reports": [{ "id", "meta": { model, iterations, total_tokens, duration_ms }, "created_at" }] }`
+
 ## Repo Chat
 
 ### `POST /ask`

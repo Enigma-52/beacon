@@ -137,6 +137,41 @@ export function askQuestion(
   return () => controller.abort();
 }
 
+export interface GhSearchResult {
+  full_name: string;
+  description: string | null;
+  language: string | null;
+  stars: number;
+  url: string;
+}
+
+export async function searchGithub(q: string): Promise<GhSearchResult[]> {
+  const res = await fetch(`${BASE}/gh-search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error('Search failed — try again shortly');
+  const data = (await res.json()) as { results: GhSearchResult[] };
+  return data.results;
+}
+
+export interface CompareVerdict {
+  winner_repo_id: number;
+  reasoning: string;
+  per_repo: { repo_id: number; verdict: string; best_for: string }[];
+}
+
+export async function compareRepos(repoIds: number[]): Promise<CompareVerdict> {
+  const res = await fetch(`${BASE}/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ repo_ids: repoIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Compare failed' }));
+    throw new Error((err as { error: string }).error);
+  }
+  const data = (await res.json()) as { comparison: CompareVerdict };
+  return data.comparison;
+}
+
 export interface ConversationTurn {
   role: 'user' | 'assistant';
   content: string;
