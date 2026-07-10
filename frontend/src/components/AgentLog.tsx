@@ -1,16 +1,15 @@
 import { useEffect, useRef } from 'react';
 import type { AgentEvent } from '../types';
 
-const TOOL_ICONS: Record<string, string> = {
-  get_repo_info: '📦',
-  list_issues: '🐛',
-  list_merged_prs: '🔀',
-  get_pr_details: '🔍',
-  list_contributors: '👥',
-  get_file_tree: '🌲',
-  get_file_content: '📄',
-  get_readme: '📖',
-  produce_analysis: '✅',
+const TOOL_GLYPHS: Record<string, string> = {
+  get_repo_info: 'meta',
+  list_issues: 'issues',
+  list_merged_prs: 'prs',
+  get_pr_details: 'pr',
+  list_contributors: 'people',
+  get_file_tree: 'tree',
+  get_file_content: 'file',
+  get_readme: 'readme',
 };
 
 interface Props {
@@ -81,7 +80,8 @@ function LogLine({ event }: { event: AgentEvent }) {
       }
       return (
         <div className="log-tool">
-          {'→ '}{TOOL_ICONS[event.name] ?? '⚙'}{' '}
+          {'→ '}
+          <span className="tool-kind">[{TOOL_GLYPHS[event.name] ?? 'tool'}]</span>{' '}
           <span className="tool-name">{event.name}</span>
           {Object.keys(event.args).length > 0 && (
             <span className="tool-args">{' '}({formatArgs(event.args)})</span>

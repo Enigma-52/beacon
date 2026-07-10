@@ -59,16 +59,16 @@
   --sp-7: 48px;
   --sp-8: 64px;
 
-  /* shape */
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
+  /* shape — crisp, tight */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 10px;
   --r-full: 999px;
 
-  /* elevation */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.45);
-  --shadow-glow: 0 0 40px var(--beacon-glow);
+  /* elevation — hairlines over shadows */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-glow: none;
 
   /* motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);

@@ -25,17 +25,17 @@
   padding: 0;
 }
 
-.nav-brand:hover .nav-brand-mark { animation: pulse-glow 1.4s ease-in-out infinite; }
-
 .nav-brand-mark {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 42%, var(--beacon-bright) 0 18%, var(--beacon) 32%, rgba(242, 180, 77, 0.15) 60%, transparent 70%);
-  box-shadow: 0 0 14px var(--beacon-glow);
+  border: 1.5px solid var(--beacon);
+  background: radial-gradient(circle at 50% 50%, var(--beacon) 0 26%, transparent 30%);
   flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
+
+.nav-brand:hover .nav-brand-mark { transform: scale(1.12); }
 
 .nav-brand-name {
   font-family: var(--font-display);
@@ -55,13 +55,12 @@
 .badge-beta {
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.12em;
-  padding: 2px 7px;
-  border-radius: var(--r-sm);
-  background: var(--beacon-dim);
-  color: var(--beacon);
-  border: 1px solid rgba(242, 180, 77, 0.3);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
 
 /* ── Eyebrows / labels ───────────────────────────────────────────────── */
@@ -95,16 +94,16 @@
 .btn:disabled { transform: none; }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--beacon-bright), var(--beacon));
-  color: #201503;
-  box-shadow: 0 0 0 1px rgba(242, 180, 77, 0.35), 0 4px 18px rgba(242, 180, 77, 0.18);
+  background: var(--beacon);
+  color: #1a1206;
+  border-color: var(--beacon);
 }
 
 .btn-primary:hover {
-  box-shadow: 0 0 0 1px rgba(242, 180, 77, 0.5), 0 6px 28px rgba(242, 180, 77, 0.32);
-  filter: brightness(1.05);
+  background: var(--beacon-bright);
+  border-color: var(--beacon-bright);
 }
-.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .btn-ghost {
   background: transparent;
@@ -160,35 +159,46 @@ select.input { cursor: pointer; }
 .card + .card { margin-top: var(--sp-3); }
 
 .card-hover {
-  transition: transform var(--dur-med) var(--ease-out), border-color var(--dur-med), box-shadow var(--dur-med);
+  transition: border-color var(--dur-fast);
 }
 
 .card-hover:hover {
-  transform: translateY(-2px);
-  border-color: #2e3a52;
-  box-shadow: var(--shadow-2);
+  border-color: #35415a;
 }
 
 /* ── Chips / pills ───────────────────────────────────────────────────── */
 
+/* Chips: hairline border, no tinted fill — label, not bubble */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: var(--r-full);
-  border: 1px solid;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
 }
 
-.chip-ok     { color: var(--ok);     background: rgba(87, 217, 163, 0.1);  border-color: rgba(87, 217, 163, 0.3); }
-.chip-warn   { color: var(--warn);   background: rgba(242, 180, 77, 0.1);  border-color: rgba(242, 180, 77, 0.3); }
-.chip-danger { color: var(--danger); background: rgba(247, 111, 114, 0.1); border-color: rgba(247, 111, 114, 0.3); }
-.chip-sea    { color: var(--sea);    background: var(--sea-dim);           border-color: rgba(106, 166, 248, 0.3); }
-.chip-muted  { color: var(--muted);  background: var(--surface-2);         border-color: var(--border); }
+.chip::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.chip-ok     { color: var(--ok); }
+.chip-warn   { color: var(--warn); }
+.chip-danger { color: var(--danger); }
+.chip-sea    { color: var(--sea); }
+.chip-muted  { color: var(--muted); }
+.chip-muted::before { display: none; }
 
 /* ── Hero ────────────────────────────────────────────────────────────── */
 
@@ -248,7 +258,6 @@ select.input { cursor: pointer; }
 
 .hero .accent-word {
   color: var(--beacon);
-  text-shadow: 0 0 30px var(--beacon-glow);
 }
 
 /* ── Feed layout ─────────────────────────────────────────────────────── */
@@ -292,9 +301,10 @@ select.input { cursor: pointer; }
 .lang-btn:hover { background: var(--surface); transform: translateX(2px); }
 
 .lang-btn.active {
-  background: var(--beacon-dim);
+  background: var(--surface-2);
   color: var(--beacon);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 0 var(--beacon);
 }
 
 .lang-btn .count { color: var(--muted-2); font-family: var(--font-mono); font-size: var(--text-xs); }
@@ -313,6 +323,13 @@ select.input { cursor: pointer; }
   flex-direction: column;
   gap: 1px;
 }
+
+.stat {
+  padding-right: var(--sp-5);
+  border-right: 1px solid var(--border-soft);
+}
+
+.stat:last-child { border-right: none; }
 
 .stat .value {
   font-family: var(--font-mono);
@@ -496,6 +513,7 @@ select.input { cursor: pointer; }
 .log-started { color: var(--ok); }
 .log-iteration { color: var(--muted-2); font-size: var(--text-xs); }
 .log-tool { color: var(--sea); }
+.log-tool .tool-kind { color: var(--muted-2); }
 .log-tool .tool-name { color: #9cc3ff; }
 .log-tool .tool-args { color: var(--muted-2); }
 .log-final { color: #c9a6ff; }
@@ -662,8 +680,8 @@ select.input { cursor: pointer; }
 
 .followup-chip {
   font-size: var(--text-xs);
-  padding: 5px 12px;
-  border-radius: var(--r-full);
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);

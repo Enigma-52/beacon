@@ -26,6 +26,11 @@ h1, h2, h3 {
   color: var(--text-strong);
 }
 
+/* Data reads in columns — keep digits fixed-width everywhere */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
 a {
   color: var(--sea);
   text-decoration: none;

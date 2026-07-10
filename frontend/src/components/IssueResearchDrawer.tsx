@@ -10,12 +10,12 @@ interface Props {
   onClose: () => void;
 }
 
-const TOOL_ICONS: Record<string, string> = {
-  get_issue_full: '📋',
-  search_similar_prs: '🔍',
-  get_pr_changed_files: '📁',
-  get_file_content: '📄',
-  produce_issue_research: '✅',
+const TOOL_GLYPHS: Record<string, string> = {
+  get_issue_full: 'issue',
+  search_similar_prs: 'search',
+  get_pr_changed_files: 'files',
+  get_file_content: 'file',
+  produce_issue_research: 'done',
 };
 
 export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props) {
@@ -234,8 +234,12 @@ function StepLine({ event }: { event: AgentEvent }) {
     return <div style={{ color: '#60a5fa', marginBottom: '4px' }}>→ starting research on issue #{event.issueNumber}</div>;
   }
   if (event.type === 'tool_call') {
-    const icon = TOOL_ICONS[event.name] ?? '🔧';
-    return <div style={{ color: 'var(--muted)', marginBottom: '2px' }}>{icon} {event.name}</div>;
+    const kind = TOOL_GLYPHS[event.name] ?? 'tool';
+    return (
+      <div style={{ color: 'var(--muted)', marginBottom: '2px' }}>
+        <span style={{ color: 'var(--muted-2)' }}>[{kind}]</span> {event.name}
+      </div>
+    );
   }
   if (event.type === 'tool_result') {
     const color = event.success ? '#4ade80' : '#f87171';
