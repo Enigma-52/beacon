@@ -13,7 +13,7 @@ Paste a GitHub repo URL. Beacon's AI agent explores it — reading issues, PRs, 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Postgres](https://img.shields.io/badge/Postgres-18-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)
-![Coverage](https://img.shields.io/badge/coverage-25%25-red?style=flat-square)
+![Coverage](https://img.shields.io/badge/coverage-28%25-red?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)
 
 <br/>
