@@ -16,19 +16,31 @@ Paste a GitHub repo URL. Beacon's AI agent explores it — reading issues, PRs, 
 ![Coverage](https://img.shields.io/badge/coverage-29%25-red?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)
 
+<br/>
+
+<img src="docs/screenshots/feed.png" alt="Beacon feed — tracked repos with AI-ranked issues" width="800" />
+
 </div>
 
 ---
 
 ## What you get
 
-- **Feed** — every repo you track, with its top AI-ranked issues, filterable by language, searchable, keyboard-navigable
-- **Repo report** — ranked issues (score + difficulty + freshness signals), architecture + ownership map, health snapshot, "start here" reading list
-- **Issue deep research** — one click on any issue: concrete approach, files to touch, similar merged PRs, effort estimate, reviewer to ping
-- **Repo chat** — streamed Q&A grounded in the stored analysis, with suggested follow-ups
-- **Contributor matching** — rank issues across all tracked repos against your skills
+| | |
+|---|---|
+| **Feed** | Every repo you track with its top AI-ranked issues — searchable, sortable, filterable by language, fully keyboard-driven |
+| **Repo report** | Ranked issues (score, difficulty, freshness signals), architecture + ownership map, health snapshot, "start here" reading list |
+| **Issue deep research** | One click on any issue: concrete approach, files to touch, similar merged PRs, effort estimate, reviewer to ping |
+| **Repo chat** | Streamed Q&A grounded in the stored analysis — with suggested follow-ups and per-session history |
+| **Find my issue** | Tell Beacon your skills and level; it ranks every open pick across all tracked repos by fit |
+| **Bookmarks & export** | Star issues into a shortlist, export any report as Markdown, share report links |
 
 Everything the agent does streams live to the UI over WebSocket — you watch it read the repo.
+
+<div align="center">
+<img src="docs/screenshots/analyze.png" alt="Analyze page — beacon hero" width="410" />
+<img src="docs/screenshots/report.png" alt="Repo report with chat" width="410" />
+</div>
 
 ## Quick start
 
@@ -49,11 +61,27 @@ Paste repo URL  →  AI agent explores GitHub iteratively (tool-calling loop)
                 →  Streamed live to the UI · cached 24h · chat on top
 ```
 
+Built to stay cheap: compact prompts, capped tool outputs, a per-run token budget,
+a cheap-first model fallback chain, and aggressive caching (24h analyses, 7-day
+issue research, dedup of concurrent runs). Chat never re-fetches GitHub — it's
+grounded in the stored analysis, one completion per message.
+
 Deep dives:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, agent loop, data model, cost controls
 - [docs/API.md](docs/API.md) — every route, SSE chat stream, WebSocket events
 - [ROADMAP.md](ROADMAP.md) — what's shipped and what's next
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `⌘K` / `Ctrl-K` | Command palette — jump to any repo or action |
+| `/` | Focus feed search |
+| `j` / `k` | Move through the feed |
+| `↵` | Open highlighted repo |
+| `r` | Deep-research the highlighted repo's top issue |
+| `Esc` | Close drawer / palette |
 
 ## Local dev
 
@@ -70,7 +98,7 @@ make coverage        # run tests with coverage report
 | Variable | Required | Description |
 |----------|:--------:|-------------|
 | `OPENROUTER_API_KEY` | ✓ | OpenRouter API key |
-| `GITHUB_TOKEN` | — | Increases GitHub rate limits |
+| `GITHUB_TOKEN` | — | Increases GitHub rate limits (60 → 5000 req/hr) |
 | `OPENROUTER_MODEL` | — | Primary model (default `openai/gpt-4o-mini`) |
 | `OPENROUTER_MODEL_FALLBACKS` | — | Comma-separated fallback models tried on provider errors |
 | `AGENT_TOKEN_BUDGET` | — | Max total tokens per agent run (default 150000) |
