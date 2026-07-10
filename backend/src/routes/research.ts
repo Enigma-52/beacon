@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { findRepoById } from '../dao/repos';
-import { findIssueResearch, upsertIssueResearch } from '../dao/issue-research';
+import { findIssueResearch, upsertIssueResearch, listResearchedIssues } from '../dao/issue-research';
+import { asyncRoute } from '../middleware/errors';
 import { runIssueResearcherAgent } from '../agents/issue-researcher.agent';
 import { eventBus } from '../services/event-bus';
 import { log } from '../services/logger';
@@ -9,6 +10,17 @@ export const researchRouter = Router();
 
 /** Maps "repoId:issueNumber" → AbortController for cancellation. */
 const activeResearch = new Map<string, AbortController>();
+
+/** List issues that already have research for this repo (badge data). */
+researchRouter.get(
+  '/research/:repoId',
+  asyncRoute(async (req: Request, res: Response) => {
+    const repoId = parseInt(req.params.repoId, 10);
+    if (isNaN(repoId)) { res.status(400).json({ error: 'invalid repo id' }); return; }
+    const researched = await listResearchedIssues(repoId);
+    res.json({ researched });
+  })
+);
 
 researchRouter.get('/research/:repoId/:issueNumber', async (req: Request, res: Response) => {
   const repoId = parseInt(req.params.repoId, 10);

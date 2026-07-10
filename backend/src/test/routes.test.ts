@@ -29,6 +29,8 @@ vi.mock('../dao/reports', () => ({
 vi.mock('../dao/issue-research', () => ({
   findIssueResearch: vi.fn(),
   upsertIssueResearch: vi.fn(),
+  listResearchedIssues: vi.fn(async () => []),
+  researchedIssuesByRepo: vi.fn(async () => new Map()),
 }));
 vi.mock('../agents/issue-researcher.agent', () => ({
   runIssueResearcherAgent: vi.fn(),

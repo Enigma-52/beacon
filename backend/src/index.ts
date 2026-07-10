@@ -57,6 +57,14 @@ wss.on('connection', (socket, req) => {
   eventBus.subscribe(repoId, socket);
 });
 
+// Keepalive so idle connections survive proxies; dead sockets get culled.
+const heartbeat = setInterval(() => {
+  for (const socket of wss.clients) {
+    if (socket.readyState === 1) socket.ping();
+  }
+}, 30_000);
+heartbeat.unref();
+
 async function start() {
   await initDb();
   httpServer.listen(PORT, () => {

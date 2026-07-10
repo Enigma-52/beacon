@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { findAllDoneRepos } from '../dao/repos';
+import { researchedIssuesByRepo } from '../dao/issue-research';
 import type { RankedIssue } from '../schemas';
 
 export const feedRouter = Router();
@@ -7,6 +8,9 @@ export const feedRouter = Router();
 feedRouter.get('/feed', async (_req: Request, res: Response) => {
   try {
     const repos = await findAllDoneRepos();
+
+    // Which issues already have deep research, per repo (for badges)
+    const researchedByRepo = await researchedIssuesByRepo().catch(() => new Map<number, number[]>());
 
     const rows = repos.map((r) => {
       const gd = r.github_data as Record<string, unknown> | null;
@@ -24,6 +28,7 @@ feedRouter.get('/feed', async (_req: Request, res: Response) => {
         stars: (gd?.stars as number | null) ?? null,
         last_analyzed: r.updated_at,
         top_issues: issues,
+        researched_issues: researchedByRepo.get(r.id) ?? [],
       };
     });
 

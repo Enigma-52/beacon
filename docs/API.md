@@ -56,12 +56,18 @@ All repos with `status = done`, newest first, plus the language list for the sid
 {
   "repos": [{ "id": 1, "url": "…", "name": "owner/repo", "description": "…",
                "language": "TypeScript", "stars": 1234,
-               "last_analyzed": "…", "top_issues": [ /* top 5 ranked issues */ ] }],
+               "last_analyzed": "…", "top_issues": [ /* top 5 ranked issues */ ],
+               "researched_issues": [15503, 15466] }],
   "languages": ["Go", "TypeScript"]
 }
 ```
 
 ## Issue research
+
+### `GET /research/:repoId`
+
+Issues with completed research for a repo (badge data):
+`{ "researched": [{ "issue_number": 15503, "effort_estimate": "days", "created_at": "…" }] }`
 
 ### `POST /research/:repoId/:issueNumber`
 

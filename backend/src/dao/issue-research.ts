@@ -19,6 +19,30 @@ export async function findIssueResearch(
   return result.rows[0] ?? null;
 }
 
+export interface ResearchedIssue {
+  issue_number: number;
+  effort_estimate: string | null;
+  created_at: Date;
+}
+
+/** Which issues in a repo already have deep research (for badges). */
+export async function listResearchedIssues(repoId: number): Promise<ResearchedIssue[]> {
+  const result = await pool.query<ResearchedIssue>(
+    `SELECT issue_number, research->>'effort_estimate' AS effort_estimate, created_at
+     FROM issue_research WHERE repo_id = $1 ORDER BY issue_number`,
+    [repoId]
+  );
+  return result.rows;
+}
+
+/** repo_id → researched issue numbers, across all repos (one query for the feed). */
+export async function researchedIssuesByRepo(): Promise<Map<number, number[]>> {
+  const result = await pool.query<{ repo_id: number; issue_numbers: number[] }>(
+    'SELECT repo_id, array_agg(issue_number) AS issue_numbers FROM issue_research GROUP BY repo_id'
+  );
+  return new Map(result.rows.map((r) => [r.repo_id, r.issue_numbers]));
+}
+
 export async function upsertIssueResearch(
   repoId: number,
   issueNumber: number,
