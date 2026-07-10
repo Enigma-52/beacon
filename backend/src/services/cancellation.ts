@@ -19,4 +19,8 @@ export const cancellation = {
   cleanup(repoId: number): void {
     controllers.delete(repoId);
   },
+
+  isRunning(repoId: number): boolean {
+    return controllers.has(repoId);
+  },
 };

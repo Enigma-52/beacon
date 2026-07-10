@@ -11,6 +11,10 @@ export async function processRepo(id: number, url: string): Promise<void> {
   if (!parsed) throw new Error('invalid GitHub URL');
 
   const { owner, repo } = parsed;
+  if (cancellation.isRunning(id)) {
+    log.warn({ repoId: id }, 'analysis already running — skipping duplicate');
+    return;
+  }
   const emit = eventBus.emitterFor(id);
   const signal = cancellation.register(id);
 

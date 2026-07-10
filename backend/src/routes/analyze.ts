@@ -33,6 +33,12 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
       return;
     }
 
+    // Join an analysis already in flight for this URL instead of racing it
+    if (existing && cancellation.isRunning(existing.id)) {
+      res.json({ id: existing.id, status: existing.status, in_flight: true });
+      return;
+    }
+
     const repo = await upsertRepo(url);
     res.json({ id: repo.id, status: repo.status });
 

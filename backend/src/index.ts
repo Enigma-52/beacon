@@ -7,8 +7,12 @@ import { analyzeRouter } from './routes/analyze';
 import { feedRouter } from './routes/feed';
 import { researchRouter } from './routes/research';
 import { matchRouter } from './routes/match';
-import { initDb } from './services/db';
+import { askRouter } from './routes/ask';
+import { statsRouter } from './routes/stats';
+import { initDb, closeDb } from './services/db';
 import { eventBus } from './services/event-bus';
+import { rateLimit } from './middleware/rate-limit';
+import { errorHandler } from './middleware/errors';
 import { log } from './services/logger';
 
 dotenv.config();
@@ -17,16 +21,23 @@ const app = express();
 const PORT = process.env.PORT ?? 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+const limiter = rateLimit();
+app.post(['/analyze', '/match', '/ask', '/research/:repoId/:issueNumber'], limiter);
+
 app.use('/', analyzeRouter);
 app.use('/', feedRouter);
 app.use('/', researchRouter);
 app.use('/', matchRouter);
+app.use('/', askRouter);
+app.use('/', statsRouter);
+
+app.use(errorHandler);
 
 const httpServer = http.createServer(app);
 
@@ -51,6 +62,27 @@ async function start() {
     log.info({ port: PORT }, 'beacon backend started');
   });
 }
+
+let shuttingDown = false;
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info({ signal }, 'shutting down');
+
+  for (const client of wss.clients) client.close(1001, 'server shutting down');
+  wss.close();
+
+  httpServer.close(async () => {
+    await closeDb().catch(() => {});
+    process.exit(0);
+  });
+
+  // Force exit if connections refuse to drain
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 start().catch((err) => {
   log.error({ err }, 'failed to start');
