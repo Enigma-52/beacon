@@ -8,7 +8,7 @@ import { cancellation } from '../services/cancellation';
 export const analyzeRouter = Router();
 
 analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
-  const { url } = req.body as { url?: string };
+  const { url, force } = req.body as { url?: string; force?: boolean };
 
   if (!url || typeof url !== 'string') {
     res.status(400).json({ error: 'url is required' });
@@ -25,6 +25,7 @@ analyzeRouter.post('/analyze', async (req: Request, res: Response) => {
     const existing = await findRepoByUrl(url);
     const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
     if (
+      !force &&
       existing &&
       existing.status === 'done' &&
       Date.now() - new Date(existing.updated_at).getTime() < CACHE_TTL_MS

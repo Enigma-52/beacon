@@ -10,8 +10,10 @@ All bodies are JSON. Errors return `{ "error": "<message>" }` with a 4xx/5xx sta
 Start (or reuse) an analysis of a GitHub repo.
 
 ```json
-{ "url": "https://github.com/facebook/react" }
+{ "url": "https://github.com/facebook/react", "force": false }
 ```
+
+Set `force: true` to skip the 24h cache and re-analyze.
 
 | Response | Meaning |
 |---|---|
@@ -137,7 +139,7 @@ One connection per repo; every agent event arrives as a JSON message:
 
 ### `GET /health`
 
-→ `{ "ok": true }`
+→ `{ "ok": true, "db": true }` — 503 when Postgres is unreachable.
 
 ### Rate limits
 

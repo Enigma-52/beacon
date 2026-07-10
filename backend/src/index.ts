@@ -9,7 +9,7 @@ import { researchRouter } from './routes/research';
 import { matchRouter } from './routes/match';
 import { askRouter } from './routes/ask';
 import { statsRouter } from './routes/stats';
-import { initDb, closeDb } from './services/db';
+import { initDb, closeDb, pool } from './services/db';
 import { eventBus } from './services/event-bus';
 import { rateLimit } from './middleware/rate-limit';
 import { errorHandler } from './middleware/errors';
@@ -23,8 +23,9 @@ const PORT = process.env.PORT ?? 3001;
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
-app.get('/health', (_req, res) => {
-  res.json({ ok: true });
+app.get('/health', async (_req, res) => {
+  const db = await pool.query('SELECT 1').then(() => true).catch(() => false);
+  res.status(db ? 200 : 503).json({ ok: db, db });
 });
 
 const limiter = rateLimit();

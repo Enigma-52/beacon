@@ -1,6 +1,7 @@
 import { updateRepoStatus, updateRepoGithubData } from '../dao/repos';
 import { insertReport } from '../dao/reports';
 import { runAnalysisAgent } from '../agents/analysis.agent';
+import { getRepoInfo } from '../tools/github.tools';
 import { parseGitHubUrl } from '../utils/validation';
 import { eventBus } from './event-bus';
 import { cancellation } from './cancellation';
@@ -22,7 +23,18 @@ export async function processRepo(id: number, url: string): Promise<void> {
 
   try {
     await updateRepoStatus(id, 'fetching');
-    await updateRepoGithubData(id, { owner, repo, fetched_at: new Date().toISOString() });
+
+    // One free GitHub call so the feed has description/language/stars
+    const repoInfo = await getRepoInfo(owner, repo).catch(() => null);
+    await updateRepoGithubData(id, {
+      owner,
+      repo,
+      fetched_at: new Date().toISOString(),
+      description: repoInfo?.description ?? null,
+      language: repoInfo?.language ?? null,
+      stars: repoInfo?.stars ?? null,
+      topics: repoInfo?.topics ?? [],
+    });
 
     await updateRepoStatus(id, 'analyzing');
     const { analysis, meta } = await runAnalysisAgent(owner, repo, emit, signal);
