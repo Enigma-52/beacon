@@ -114,6 +114,7 @@ export function ChatPanel({ repoId }: { repoId: number }) {
         <span className="eyebrow">Ask this repo</span>
         <span className="nav-tagline">grounded in the analysis — no hallucinated files</span>
       </div>
+      {busy && <div className="chat-thinking" aria-hidden="true" />}
 
       {bubbles.length > 0 && (
         <div className="chat-messages">

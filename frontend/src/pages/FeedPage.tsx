@@ -151,17 +151,6 @@ export function FeedPage() {
         </aside>
 
         <main className="feed-main">
-          {stats && stats.repos > 0 && (
-            <div className="stats-strip fade-in">
-              <div className="stat"><span className="value">{stats.repos}</span><span className="label">repos tracked</span></div>
-              <div className="stat"><span className="value">{stats.issues_ranked}</span><span className="label">issues ranked</span></div>
-              <div className="stat"><span className="value">{stats.research_runs}</span><span className="label">deep dives</span></div>
-              {stats.total_tokens > 0 && (
-                <div className="stat"><span className="value">{formatTokens(stats.total_tokens)}</span><span className="label">tokens spent</span></div>
-              )}
-            </div>
-          )}
-
           <div className="filter-bar">
             <input
               ref={searchRef}
@@ -235,6 +224,13 @@ export function FeedPage() {
             ))}
           </div>
         </main>
+
+        <RightRail
+          feed={feed}
+          stats={stats}
+          onResearch={(repoId, issue, repoName) => setResearchTarget({ repoId, issue, repoName })}
+          onDifficulty={() => setDifficulty('beginner')}
+        />
       </div>
 
       {compareIds.length >= 2 && !comparison && (
@@ -306,6 +302,106 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
   return String(n);
+}
+
+function RightRail({
+  feed,
+  stats,
+  onResearch,
+  onDifficulty,
+}: {
+  feed: FeedResponse | null;
+  stats: PlatformStats | null;
+  onResearch: (repoId: number, issue: RankedIssue, repoName: string) => void;
+  onDifficulty: () => void;
+}) {
+  if (!feed || feed.repos.length === 0) return null;
+
+  // Highest-scored issue across every tracked repo
+  let topPick: { repo: FeedRepo; issue: RankedIssue } | null = null;
+  let beginnerCount = 0;
+  const researched: { repo: FeedRepo; issue: RankedIssue }[] = [];
+
+  for (const repo of feed.repos) {
+    for (const issue of repo.top_issues) {
+      if (!topPick || issue.score > topPick.issue.score) topPick = { repo, issue };
+      if (issue.difficulty === 'beginner') beginnerCount++;
+      if (repo.researched_issues?.includes(issue.number)) researched.push({ repo, issue });
+    }
+  }
+
+  return (
+    <aside className="right-rail" aria-label="Feed highlights">
+      {topPick && (
+        <section className="rail-card">
+          <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>Top pick right now</p>
+          <div style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'flex-start' }}>
+            <ScoreRing score={topPick.issue.score} size={30} />
+            <div style={{ minWidth: 0 }}>
+              <a href={topPick.issue.github_url} target="_blank" rel="noreferrer"
+                 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text)', display: 'block', lineHeight: 1.4 }}>
+                #{topPick.issue.number} {topPick.issue.title}
+              </a>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--muted-2)', margin: '3px 0 0', fontFamily: 'var(--font-mono)' }}>
+                {topPick.repo.name}
+              </p>
+            </div>
+          </div>
+          <button
+            className="btn btn-ghost"
+            style={{ width: '100%', marginTop: 'var(--sp-3)', padding: '6px', fontSize: 'var(--text-xs)' }}
+            onClick={() => onResearch(topPick!.repo.id, topPick!.issue, topPick!.repo.name)}
+          >
+            Deep dive →
+          </button>
+        </section>
+      )}
+
+      {beginnerCount > 0 && (
+        <section className="rail-card">
+          <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>New here?</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', margin: 0 }}>
+            <strong style={{ color: 'var(--ok)' }}>{beginnerCount}</strong> beginner-friendly pick{beginnerCount !== 1 ? 's' : ''} across the feed.
+          </p>
+          <button
+            className="btn btn-ghost"
+            style={{ width: '100%', marginTop: 'var(--sp-3)', padding: '6px', fontSize: 'var(--text-xs)' }}
+            onClick={onDifficulty}
+          >
+            Show beginner picks
+          </button>
+        </section>
+      )}
+
+      {researched.length > 0 && (
+        <section className="rail-card">
+          <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>Already researched</p>
+          {researched.slice(0, 4).map(({ repo, issue }) => (
+            <button
+              key={`${repo.id}-${issue.number}`}
+              className="rail-link"
+              onClick={() => onResearch(repo.id, issue, repo.name)}
+              title={`${repo.name} #${issue.number}`}
+            >
+              #{issue.number} {issue.title}
+            </button>
+          ))}
+        </section>
+      )}
+
+      {stats && stats.repos > 0 && (
+        <section className="rail-card">
+          <p className="eyebrow" style={{ marginBottom: 'var(--sp-2)' }}>Beacon so far</p>
+          <div className="rail-stats">
+            <span><strong>{stats.repos}</strong> repos tracked</span>
+            <span><strong>{stats.issues_ranked}</strong> issues ranked</span>
+            <span><strong>{stats.research_runs}</strong> deep dives</span>
+            {stats.total_tokens > 0 && <span><strong>{formatTokens(stats.total_tokens)}</strong> tokens spent</span>}
+          </div>
+        </section>
+      )}
+    </aside>
+  );
 }
 
 function CompareResult({

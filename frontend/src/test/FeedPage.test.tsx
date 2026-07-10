@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { FeedPage } from '../pages/FeedPage';
 import * as api from '../api';
@@ -76,8 +76,8 @@ describe('FeedPage', () => {
   it('renders repo names after loading', async () => {
     renderFeed();
     await waitFor(() => {
-      expect(screen.getByText('facebook/react')).toBeInTheDocument();
-      expect(screen.getByText('vercel/next.js')).toBeInTheDocument();
+      expect(screen.getAllByText('facebook/react').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('vercel/next.js').length).toBeGreaterThan(0);
     });
   });
 
@@ -104,14 +104,16 @@ describe('FeedPage', () => {
     // Click the TypeScript button in the sidebar (first occurrence = sidebar button)
     fireEvent.click(screen.getAllByText(/^TypeScript/)[0]);
 
-    expect(screen.queryByText('facebook/react')).toBeNull();
-    expect(screen.getByText('vercel/next.js')).toBeInTheDocument();
+    // Main feed column shows only the TypeScript repo (right rail may still show highlights)
+    const main = document.querySelector('.feed-main')!;
+    expect(within(main as HTMLElement).queryByText('facebook/react')).toBeNull();
+    expect(within(main as HTMLElement).getByText('vercel/next.js')).toBeInTheDocument();
   });
 
   it('renders issue inside repo card', async () => {
     renderFeed();
     await waitFor(() => {
-      expect(screen.getByText(/#123 Fix useEffect memory leak/)).toBeInTheDocument();
+      expect(screen.getAllByText(/#123 Fix useEffect memory leak/).length).toBeGreaterThan(0);
     });
   });
 

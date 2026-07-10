@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AgentEvent } from '../types';
 
 const TOOL_GLYPHS: Record<string, string> = {
@@ -12,6 +12,22 @@ const TOOL_GLYPHS: Record<string, string> = {
   get_readme: 'readme',
 };
 
+/** Exploration phases, in the order the agent typically works. */
+const PHASES = ['survey', 'issues', 'prs', 'people', 'code', 'synthesis'] as const;
+type Phase = (typeof PHASES)[number];
+
+const TOOL_PHASE: Record<string, Phase> = {
+  get_repo_info: 'survey',
+  list_issues: 'issues',
+  list_merged_prs: 'prs',
+  get_pr_details: 'prs',
+  list_contributors: 'people',
+  get_file_tree: 'code',
+  get_file_content: 'code',
+  get_readme: 'code',
+  produce_analysis: 'synthesis',
+};
+
 interface Props {
   events: AgentEvent[];
   repoId: number | null;
@@ -20,26 +36,69 @@ interface Props {
 
 export function AgentLog({ events, repoId, onCancel }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+
+  const isFinished = events.some((e) => e.type === 'done' || e.type === 'error');
+  const isRunning = repoId !== null && !isFinished && events.length > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [events]);
 
+  useEffect(() => {
+    if (!isRunning) return;
+    if (startRef.current === null) startRef.current = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current!) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [isRunning]);
+
   if (events.length === 0) return null;
 
-  const isFinished = events.some((e) => e.type === 'done' || e.type === 'error');
-  const isRunning = repoId !== null && !isFinished;
+  const started = events.find((e) => e.type === 'started');
+  const done = events.find((e) => e.type === 'done');
+  const reached = new Set<Phase>();
+  let current: Phase | null = null;
+  for (const e of events) {
+    if (e.type === 'tool_call' && TOOL_PHASE[e.name]) {
+      current = TOOL_PHASE[e.name];
+      reached.add(current);
+    }
+  }
 
   return (
-    <div className="agent-log rise-in">
-      <div className="agent-log-header">
-        <span style={{ display: 'flex', alignItems: 'center' }}>
-          <span className="eyebrow">AGENT LOG</span>
-          {isRunning && <span className="scanning" aria-hidden="true" />}
-        </span>
-        {isRunning && (
-          <button className="btn btn-danger-ghost" onClick={onCancel}>Stop</button>
-        )}
+    <div className="agent-console rise-in">
+      <div className="agent-console-header">
+        <div className="agent-console-title">
+          <span className={`console-light${isRunning ? ' live' : ''}`} aria-hidden="true" />
+          {started?.type === 'started' && (
+            <span className="console-repo">{started.owner}/{started.repo}</span>
+          )}
+          {started?.type === 'started' && <span className="chip chip-muted">{started.model}</span>}
+        </div>
+        <div className="agent-console-meta">
+          {isRunning && <span className="console-clock">{formatElapsed(elapsed)}</span>}
+          {done?.type === 'done' && (
+            <>
+              <span className="chip chip-muted">{done.iterations} steps</span>
+              <span className="chip chip-muted">{done.totalTokens.toLocaleString()} tokens</span>
+            </>
+          )}
+          {isRunning && (
+            <button className="btn btn-danger-ghost" onClick={onCancel}>Stop</button>
+          )}
+        </div>
+      </div>
+
+      <div className="phase-track" aria-label="Exploration phases">
+        {PHASES.map((p) => (
+          <span
+            key={p}
+            className={`phase${reached.has(p) ? ' reached' : ''}${current === p && isRunning ? ' current' : ''}`}
+          >
+            {p}
+          </span>
+        ))}
       </div>
 
       <div className="agent-log-body">
@@ -52,13 +111,17 @@ export function AgentLog({ events, repoId, onCancel }: Props) {
   );
 }
 
+function formatElapsed(s: number): string {
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}
+
 function LogLine({ event }: { event: AgentEvent }) {
   switch (event.type) {
     case 'started':
       return (
         <div className="log-started">
           {'◆ analyzing '}<span style={{ color: 'var(--text)' }}>{event.owner}/{event.repo}</span>
-          <span style={{ color: 'var(--muted-2)', fontSize: 'var(--text-xs)' }}> via {event.model}</span>
         </div>
       );
 
@@ -74,7 +137,7 @@ function LogLine({ event }: { event: AgentEvent }) {
         return (
           <div className="log-final">
             {'→ produce_analysis'}
-            <span style={{ color: 'var(--muted-2)' }}> — finalizing</span>
+            <span style={{ color: 'var(--muted-2)' }}> — synthesizing report</span>
           </div>
         );
       }

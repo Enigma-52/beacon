@@ -9,16 +9,17 @@ describe('AgentLog', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows AGENT LOG header when events present', () => {
+  it('shows console header with repo and model when events present', () => {
     const events: AgentEvent[] = [{ type: 'started', owner: 'foo', repo: 'bar', model: 'gpt-4o-mini' }];
     render(<AgentLog events={events} repoId={1} onCancel={() => {}} />);
-    expect(screen.getByText('AGENT LOG')).toBeInTheDocument();
+    expect(screen.getAllByText('foo/bar').length).toBeGreaterThan(0);
+    expect(screen.getByText('gpt-4o-mini')).toBeInTheDocument();
   });
 
   it('renders started event with owner/repo', () => {
     const events: AgentEvent[] = [{ type: 'started', owner: 'facebook', repo: 'react', model: 'gpt-4o-mini' }];
     render(<AgentLog events={events} repoId={1} onCancel={() => {}} />);
-    expect(screen.getByText(/facebook\/react/)).toBeInTheDocument();
+    expect(screen.getAllByText(/facebook\/react/).length).toBeGreaterThan(0);
   });
 
   it('renders tool_call event', () => {
