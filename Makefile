@@ -27,3 +27,6 @@ docker-down:
 
 docker-logs:
 	docker compose logs -f
+
+seed:
+	./scripts/seed.sh
