@@ -13,4 +13,4 @@ class MockWebSocket {
   close() {}
   send() {}
 }
-(global as unknown as Record<string, unknown>).WebSocket = MockWebSocket;
+(globalThis as unknown as Record<string, unknown>).WebSocket = MockWebSocket;

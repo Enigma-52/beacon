@@ -6,6 +6,7 @@ import * as api from '../api';
 
 vi.mock('../api', () => ({
   getFeed: vi.fn(),
+  getStats: vi.fn(),
   analyzeRepo: vi.fn(),
   getReport: vi.fn(),
   cancelAnalysis: vi.fn(),
@@ -63,6 +64,7 @@ describe('FeedPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getFeed).mockResolvedValue(mockFeed);
+    vi.mocked(api.getStats).mockResolvedValue({ repos: 2, reports: 2, issues_ranked: 5, research_runs: 1, total_tokens: 42000 });
     vi.mocked(api.getIssueResearch).mockRejectedValue(new Error('not_found'));
   });
 

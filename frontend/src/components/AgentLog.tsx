@@ -32,49 +32,18 @@ export function AgentLog({ events, repoId, onCancel }: Props) {
   const isRunning = repoId !== null && !isFinished;
 
   return (
-    <div style={{
-      marginTop: '24px',
-      background: '#0a0a0a',
-      border: '1px solid var(--border)',
-      borderRadius: '8px',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        padding: '8px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: '11px', color: 'var(--muted)', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
-          AGENT LOG
+    <div className="agent-log rise-in">
+      <div className="agent-log-header">
+        <span style={{ display: 'flex', alignItems: 'center' }}>
+          <span className="eyebrow">AGENT LOG</span>
+          {isRunning && <span className="scanning" aria-hidden="true" />}
         </span>
         {isRunning && (
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '3px 10px',
-              background: 'transparent',
-              border: '1px solid #ef4444',
-              borderRadius: '4px',
-              color: '#ef4444',
-              fontSize: '11px',
-              cursor: 'pointer',
-            }}
-          >
-            Stop
-          </button>
+          <button className="btn btn-danger-ghost" onClick={onCancel}>Stop</button>
         )}
       </div>
 
-      <div style={{
-        maxHeight: '320px',
-        overflowY: 'auto',
-        padding: '12px 14px',
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        lineHeight: '1.8',
-      }}>
+      <div className="agent-log-body">
         {events.map((event, i) => (
           <LogLine key={i} event={event} />
         ))}
@@ -88,15 +57,15 @@ function LogLine({ event }: { event: AgentEvent }) {
   switch (event.type) {
     case 'started':
       return (
-        <div style={{ color: '#4ade80' }}>
-          {'◆ analyzing '}<span style={{ color: '#e8e8e8' }}>{event.owner}/{event.repo}</span>
-          <span style={{ color: '#888', fontSize: '11px' }}> via {event.model}</span>
+        <div className="log-started">
+          {'◆ analyzing '}<span style={{ color: 'var(--text)' }}>{event.owner}/{event.repo}</span>
+          <span style={{ color: 'var(--muted-2)', fontSize: 'var(--text-xs)' }}> via {event.model}</span>
         </div>
       );
 
     case 'iteration':
       return (
-        <div style={{ color: '#555', fontSize: '11px' }}>
+        <div className="log-iteration">
           {'  iteration '}{event.iteration} ({event.messageCount} messages)
         </div>
       );
@@ -104,42 +73,41 @@ function LogLine({ event }: { event: AgentEvent }) {
     case 'tool_call':
       if (event.name === 'produce_analysis') {
         return (
-          <div style={{ color: '#a78bfa' }}>
-            {'→ '}<span style={{ color: '#c4b5fd' }}>produce_analysis</span>
-            <span style={{ color: '#555' }}> — finalizing</span>
+          <div className="log-final">
+            {'→ produce_analysis'}
+            <span style={{ color: 'var(--muted-2)' }}> — finalizing</span>
           </div>
         );
       }
       return (
-        <div style={{ color: '#60a5fa' }}>
+        <div className="log-tool">
           {'→ '}{TOOL_ICONS[event.name] ?? '⚙'}{' '}
-          <span style={{ color: '#93c5fd' }}>{event.name}</span>
+          <span className="tool-name">{event.name}</span>
           {Object.keys(event.args).length > 0 && (
-            <span style={{ color: '#555' }}>{' '}({formatArgs(event.args)})</span>
+            <span className="tool-args">{' '}({formatArgs(event.args)})</span>
           )}
         </div>
       );
 
     case 'tool_result':
       return (
-        <div style={{ color: event.success ? '#86efac' : '#fca5a5', paddingLeft: '16px' }}>
+        <div className={event.success ? 'log-result-ok' : 'log-result-err'}>
           {'← '}{event.summary}
         </div>
       );
 
     case 'done':
       return (
-        <div style={{ color: '#4ade80', marginTop: '4px' }}>
+        <div className="log-done">
           {'✓ done — '}{event.iterations} iterations, {event.totalTokens.toLocaleString()} tokens
         </div>
       );
 
     case 'error':
-      return (
-        <div style={{ color: '#f87171' }}>
-          {'✗ '}{event.message}
-        </div>
-      );
+      return <div className="log-error">{'✗ '}{event.message}</div>;
+
+    default:
+      return null;
   }
 }
 

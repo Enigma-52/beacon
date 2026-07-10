@@ -3,6 +3,9 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { SearchBar } from './components/SearchBar';
 import { ReportTabs } from './components/ReportTabs';
 import { AgentLog } from './components/AgentLog';
+import { ChatPanel } from './components/ChatPanel';
+import { Nav } from './components/Nav';
+import { ToastProvider, useToast, Skeleton } from './components/ui';
 import { useAgentStream } from './hooks/useAgentStream';
 import { analyzeRepo, getReport, cancelAnalysis } from './api';
 import { FeedPage } from './pages/FeedPage';
@@ -10,41 +13,13 @@ import type { RepoReport } from './types';
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<FeedPage />} />
-      <Route path="/analyze" element={<AnalyzePage />} />
-      <Route path="/r/:id" element={<RepoDetailPage />} />
-    </Routes>
-  );
-}
-
-function Nav() {
-  const navigate = useNavigate();
-  return (
-    <nav style={{
-      borderBottom: '1px solid var(--border)',
-      padding: '0 32px',
-      height: '52px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      background: 'var(--surface)',
-      position: 'sticky',
-      top: 0,
-      zIndex: 10,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => navigate('/')}>
-        <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>Beacon</span>
-        <span style={{
-          fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px',
-          background: '#5b8ef015', color: 'var(--accent)', border: '1px solid #5b8ef030',
-          letterSpacing: '0.05em',
-        }}>BETA</span>
-      </div>
-      <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
-        Navigate open source like you've been there before.
-      </span>
-    </nav>
+    <ToastProvider>
+      <Routes>
+        <Route path="/" element={<FeedPage />} />
+        <Route path="/analyze" element={<AnalyzePage />} />
+        <Route path="/r/:id" element={<RepoDetailPage />} />
+      </Routes>
+    </ToastProvider>
   );
 }
 
@@ -55,6 +30,7 @@ function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
+  const toast = useToast();
 
   const agentEvents = useAgentStream(repoId);
 
@@ -68,10 +44,16 @@ function AnalyzePage() {
       try {
         const data = await getReport(id);
         setReport(data);
-        if (data.status === 'done' || data.status === 'error') { stopPolling(); setLoading(false); }
+        if (data.status === 'done' || data.status === 'error') {
+          stopPolling();
+          setLoading(false);
+          if (data.status === 'done') toast('ok', 'Analysis complete');
+        }
       } catch { stopPolling(); setError('Failed to fetch report'); setLoading(false); }
     }, 3000);
   }
+
+  useEffect(() => stopPolling, []);
 
   async function handleAnalyze(url: string) {
     stopPolling();
@@ -84,6 +66,7 @@ function AnalyzePage() {
       const { id, cached } = await analyzeRepo(url) as { id: number; status: string; cached?: boolean };
       setRepoId(id);
       if (cached) {
+        toast('info', 'Analyzed recently — showing cached report');
         navigate(`/r/${id}`);
         return;
       }
@@ -98,52 +81,59 @@ function AnalyzePage() {
     if (!repoId) return;
     await cancelAnalysis(repoId).catch(() => {});
     stopPolling(); setLoading(false); setRepoId(null);
+    toast('info', 'Analysis stopped');
   }
 
   const isDone = agentEvents.some((e) => e.type === 'done');
+  const showHero = !report && !agentEvents.length;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="page-shell">
       <Nav />
-      <main style={{ flex: 1, maxWidth: '900px', width: '100%', margin: '0 auto', padding: '40px 24px' }}>
-        {!report && !agentEvents.length && (
-          <div style={{ textAlign: 'center', marginBottom: '40px', paddingTop: '32px' }}>
-            <h1 style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '12px' }}>
-              Understand any GitHub repo<br />before you write a line of code.
+      <main className="page-main">
+        {showHero && (
+          <header className="hero">
+            <div className="hero-beam" aria-hidden="true" />
+            <h1>
+              Understand any GitHub repo<br />
+              before you write a <span className="accent-word">line of code</span>.
             </h1>
-            <p style={{ color: 'var(--muted)', fontSize: '16px', maxWidth: '480px', margin: '0 auto' }}>
-              Paste a repo URL. Beacon's AI agent explores it and surfaces ranked issues,
-              architecture, health, and where to start — in seconds.
+            <p>
+              Paste a repo URL. Beacon's agent reads the issues, PRs, and code —
+              then shows you exactly where to land your first contribution.
             </p>
-          </div>
+          </header>
         )}
 
         <SearchBar onSubmit={handleAnalyze} loading={loading} />
 
-        {error && (
-          <div style={{ marginTop: '16px', padding: '12px 16px', background: '#f8717110', border: '1px solid #f8717130', borderRadius: '8px', color: 'var(--error)', fontSize: '14px' }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="error-banner">{error}</div>}
 
         {loading && !agentEvents.length && (
-          <p style={{ marginTop: '24px', color: 'var(--muted)', textAlign: 'center' }}>Connecting to agent…</p>
+          <p style={{ marginTop: 'var(--sp-5)', color: 'var(--muted)', textAlign: 'center' }}>
+            Connecting to agent…
+          </p>
         )}
 
         <AgentLog events={agentEvents} repoId={repoId} onCancel={handleCancel} />
 
-        {isDone && report?.analysis && <ReportTabs report={report} />}
+        {isDone && report?.analysis && (
+          <>
+            <ReportTabs report={report} />
+            {repoId && <ChatPanel repoId={repoId} />}
+          </>
+        )}
 
         {!isDone && report && report.status !== 'done' && (
-          <p style={{ marginTop: '16px', color: 'var(--muted)', fontSize: '13px', textAlign: 'center' }}>
+          <p style={{ marginTop: 'var(--sp-4)', color: 'var(--muted)', fontSize: 'var(--text-sm)', textAlign: 'center' }}>
             Status: <strong style={{ color: 'var(--text)' }}>{report.status}</strong>
           </p>
         )}
       </main>
 
-      <footer style={{ borderTop: '1px solid var(--border-soft)', padding: '16px 32px', fontSize: '12px', color: 'var(--muted-2)', display: 'flex', justifyContent: 'space-between' }}>
+      <footer className="footer">
         <span>Beacon — OSS navigator</span>
-        <span>Powered by OpenRouter</span>
+        <span>powered by OpenRouter</span>
       </footer>
     </div>
   );
@@ -164,20 +154,27 @@ function RepoDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Nav />
-      <main style={{ flex: 1, maxWidth: '900px', width: '100%', margin: '0 auto', padding: '40px 24px' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '13px', marginBottom: '24px', padding: 0 }}
-        >
-          ← Back to feed
-        </button>
+  const repoId = id ? parseInt(id, 10) : null;
 
-        {loading && <p style={{ color: 'var(--muted)' }}>Loading…</p>}
-        {error && <p style={{ color: 'var(--error)' }}>{error}</p>}
-        {report && <ReportTabs report={report} />}
+  return (
+    <div className="page-shell">
+      <Nav />
+      <main className="page-main">
+        <button className="back-link" onClick={() => navigate('/')}>← back to feed</button>
+
+        {loading && (
+          <div>
+            <Skeleton width={260} height={20} />
+            <Skeleton width="100%" height={120} style={{ marginTop: 16 }} />
+          </div>
+        )}
+        {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+        {report && (
+          <div className="fade-in">
+            <ReportTabs report={report} />
+            {repoId !== null && report.analysis && <ChatPanel repoId={repoId} />}
+          </div>
+        )}
       </main>
     </div>
   );

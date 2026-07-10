@@ -2,6 +2,13 @@ import type { RankedIssue } from './analysisTypes';
 
 export type RepoStatus = 'pending' | 'fetching' | 'analyzing' | 'done' | 'error';
 
+export interface ReportMeta {
+  model?: string;
+  iterations?: number;
+  total_tokens?: number;
+  duration_ms?: number;
+}
+
 export interface RepoReport {
   id: number;
   url: string;
@@ -13,6 +20,7 @@ export interface RepoReport {
     health?: unknown;
     starting_points?: unknown;
   } | null;
+  meta?: ReportMeta | null;
   created_at: string;
 }
 

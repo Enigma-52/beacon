@@ -101,30 +101,26 @@ export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props)
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 40 }} />
+      <div className="drawer-overlay" onClick={onClose} />
 
-      <div style={{
-        position: 'fixed', right: 0, top: 0, bottom: 0, width: '500px',
-        background: 'var(--surface)', borderLeft: '1px solid var(--border)',
-        zIndex: 50, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
-      }}>
+      <div className="drawer" style={{ padding: 'var(--sp-5)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>{repoName}</p>
+            <p className="eyebrow" style={{ marginBottom: '4px' }}>{repoName}</p>
             <a href={issue.github_url} target="_blank" rel="noreferrer"
-              style={{ color: 'var(--text)', fontWeight: 700, fontSize: '15px', textDecoration: 'none' }}>
+              style={{ color: 'var(--text-strong)', fontWeight: 700, fontSize: '15px', fontFamily: 'var(--font-display)' }}>
               #{issue.number} {issue.title}
             </a>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '18px', padding: '4px' }}>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '18px', padding: '4px' }}>
             ✕
           </button>
         </div>
 
         {/* Action button */}
         {!running ? (
-          <button onClick={handleResearch} style={primaryBtn}>
+          <button onClick={handleResearch} className="btn btn-primary" style={{ width: '100%' }}>
             {research ? 'Re-run deep research' : 'Run deep research'}
           </button>
         ) : (
@@ -135,7 +131,8 @@ export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props)
               wsRef.current?.close();
               setSteps((prev) => [...prev, { type: 'research_error', message: 'Cancelled' }]);
             }}
-            style={{ ...primaryBtn, background: '#f87171' }}
+            className="btn btn-danger-ghost"
+            style={{ width: '100%', padding: '9px 18px', fontSize: 'var(--text-sm)' }}
           >
             Cancel
           </button>
@@ -144,8 +141,8 @@ export function IssueResearchDrawer({ repoId, issue, repoName, onClose }: Props)
         {/* Live step log */}
         {(running || steps.length > 0) && (
           <div style={{
-            background: '#0a0a0c', border: '1px solid var(--border)', borderRadius: '8px',
-            padding: '12px', fontFamily: 'monospace', fontSize: '12px', maxHeight: '220px', overflowY: 'auto',
+            background: '#080b11', border: '1px solid var(--border)', borderRadius: 'var(--r-md)',
+            padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '12px', maxHeight: '220px', overflowY: 'auto',
           }}>
             {steps.map((step, i) => <StepLine key={i} event={step} />)}
             {running && (
@@ -247,9 +244,7 @@ function StepLine({ event }: { event: AgentEvent }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', marginBottom: '8px' }}>
-        {title.toUpperCase()}
-      </p>
+      <p className="eyebrow" style={{ marginBottom: '8px' }}>{title}</p>
       {children}
     </div>
   );
@@ -267,7 +262,3 @@ function InfoPill({ label, value, href }: { label: string; value: string; href?:
   );
 }
 
-const primaryBtn: React.CSSProperties = {
-  padding: '10px 20px', borderRadius: '8px', background: 'var(--accent)',
-  color: '#fff', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, width: '100%',
-};
