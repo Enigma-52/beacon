@@ -3,8 +3,10 @@ import { AnalysisSchema } from '../schemas';
 import type { Analysis } from '../schemas';
 import { ALL_TOOLS } from '../tools/definitions';
 import { executeTool } from '../tools/executor';
-import type { ToolCall, AnalysisDone } from '../tools/executor';
+import type { AnalysisDone } from '../tools/executor';
 import { ANALYSIS_SYSTEM_PROMPT } from '../prompts/analysis.prompt';
+import { complete, modelChain } from '../services/openrouter';
+import type { ChatMessage } from '../services/openrouter';
 import { log } from '../services/logger';
 import type { AgentEmitter } from './events';
 import { noopEmitter } from './events';
@@ -12,60 +14,24 @@ import { noopEmitter } from './events';
 const ajv = new Ajv({ strict: false });
 const validateAnalysis = ajv.compile(AnalysisSchema);
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const MAX_ITERATIONS = 20;
 const MAX_CONSECUTIVE_ERRORS = 4;
 
-type Role = 'system' | 'user' | 'assistant' | 'tool';
-
-interface Message {
-  role: Role;
-  content: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
+export function tokenBudget(): number {
+  const raw = Number(process.env.AGENT_TOKEN_BUDGET);
+  return Number.isFinite(raw) && raw > 0 ? raw : 150_000;
 }
 
-interface OpenRouterResponse {
-  choices: {
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: ToolCall[];
-    };
-    finish_reason: string;
-  }[];
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+export interface AnalysisRunMeta {
+  model: string;
+  iterations: number;
+  total_tokens: number;
+  duration_ms: number;
 }
 
-async function callLLM(messages: Message[], model: string, signal: AbortSignal): Promise<OpenRouterResponse> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set');
-
-  const res = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    signal,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://github.com/beacon',
-      'X-Title': 'Beacon',
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools: ALL_TOOLS,
-      tool_choice: 'auto',
-      temperature: 0.2,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${body}`);
-  }
-
-  return res.json() as Promise<OpenRouterResponse>;
+export interface AnalysisResult {
+  analysis: Analysis;
+  meta: AnalysisRunMeta;
 }
 
 export async function runAnalysisAgent(
@@ -73,13 +39,14 @@ export async function runAnalysisAgent(
   repo: string,
   emit: AgentEmitter = noopEmitter,
   signal: AbortSignal = new AbortController().signal
-): Promise<Analysis> {
-  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
+): Promise<AnalysisResult> {
+  const startedAt = Date.now();
+  const model = modelChain()[0];
 
   log.info({ owner, repo, model }, 'analysis agent started');
   emit({ type: 'started', owner, repo, model });
 
-  const messages: Message[] = [
+  const messages: ChatMessage[] = [
     { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
     {
       role: 'user',
@@ -90,6 +57,8 @@ export async function runAnalysisAgent(
   let iterations = 0;
   let totalTokens = 0;
   let consecutiveErrors = 0;
+  let budgetWarned = false;
+  const budget = tokenBudget();
 
   while (iterations < MAX_ITERATIONS) {
     if (signal.aborted) {
@@ -102,11 +71,20 @@ export async function runAnalysisAgent(
     emit({ type: 'iteration', iteration: iterations, messageCount: messages.length });
     log.info({ iteration: iterations, messageCount: messages.length }, 'agent iteration');
 
-    const response = await callLLM(messages, model, signal);
+    const response = await complete({ messages, tools: ALL_TOOLS, temperature: 0.2, signal });
     const choice = response.choices[0];
 
     if (response.usage) {
       totalTokens += response.usage.total_tokens;
+    }
+
+    if (totalTokens > budget && !budgetWarned) {
+      budgetWarned = true;
+      log.warn({ totalTokens, budget }, 'token budget exceeded — asking agent to finish');
+      messages.push({
+        role: 'user',
+        content: 'Token budget reached. Call produce_analysis NOW with your findings so far. Use "unknown" where data is missing.',
+      });
     }
 
     messages.push({
@@ -145,7 +123,10 @@ export async function runAnalysisAgent(
 
           log.info({ iterations, totalTokens }, 'agent complete');
           emit({ type: 'done', iterations, totalTokens });
-          return done.payload as Analysis;
+          return {
+            analysis: done.payload as Analysis,
+            meta: { model, iterations, total_tokens: totalTokens, duration_ms: Date.now() - startedAt },
+          };
         }
 
         const isError = result.summary.startsWith('error:');

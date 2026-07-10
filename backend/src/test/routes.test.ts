@@ -113,7 +113,7 @@ describe('GET /report/:id', () => {
       github_data: null, created_at: new Date(), updated_at: new Date(),
     });
     vi.mocked(reportsDao.findReportByRepoId).mockResolvedValue({
-      id: 1, repo_id: 1, analysis: { issues: [] }, created_at: new Date(),
+      id: 1, repo_id: 1, analysis: { issues: [] }, meta: null, created_at: new Date(),
     });
 
     const res = await request(buildApp()).get('/report/1');

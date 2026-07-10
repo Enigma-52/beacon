@@ -4,10 +4,8 @@
  * returns the top N issues across all repos ranked by fit.
  */
 import type { RankedIssue } from '../schemas';
+import { complete } from '../services/openrouter';
 import { log } from '../services/logger';
-
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
 export interface ContributorProfile {
   skills: string[];        // e.g. ['TypeScript', 'React', 'Node.js']
@@ -33,11 +31,6 @@ export async function runContributorMatcher(
   profile: ContributorProfile,
   repos: CachedRepo[]
 ): Promise<MatchedIssue[]> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-
-  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
-
   // Flatten all issues with repo context
   const allIssues = repos.flatMap((r) =>
     r.issues.map((issue) => ({
@@ -64,7 +57,7 @@ Contributor profile:
 - Interests: ${profile.interests?.join(', ') ?? 'any'}
 
 Available issues (${allIssues.length} total):
-${JSON.stringify(allIssues, null, 2)}
+${JSON.stringify(allIssues)}
 
 Return a JSON array of the top 10 matches. Each item must have:
 - repo_id (number)
@@ -76,26 +69,12 @@ Return a JSON array of the top 10 matches. Each item must have:
 Prioritize: difficulty match to level, skill relevance, fresh issues (is_fresh=true), issues with no comments (easier to claim).
 Return ONLY valid JSON, no markdown.`;
 
-  const res = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://github.com/beacon',
-      'X-Title': 'Beacon',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-    }),
+  const data = await complete({
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.1,
+    responseFormat: 'json_object',
   });
-
-  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-
-  const data = await res.json() as { choices: { message: { content: string } }[] };
-  const raw = JSON.parse(data.choices[0].message.content) as { matches?: unknown[] } | unknown[];
+  const raw = JSON.parse(data.choices[0].message.content ?? '{}') as { matches?: unknown[] } | unknown[];
 
   const matches = (Array.isArray(raw) ? raw : (raw as { matches?: unknown[] }).matches ?? []) as {
     repo_id: number;

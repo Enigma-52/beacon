@@ -21,9 +21,9 @@ export async function processRepo(id: number, url: string): Promise<void> {
     await updateRepoGithubData(id, { owner, repo, fetched_at: new Date().toISOString() });
 
     await updateRepoStatus(id, 'analyzing');
-    const analysis = await runAnalysisAgent(owner, repo, emit, signal);
+    const { analysis, meta } = await runAnalysisAgent(owner, repo, emit, signal);
 
-    await insertReport(id, analysis);
+    await insertReport(id, analysis, meta);
     await updateRepoStatus(id, 'done');
 
     log.info({ repoId: id }, 'processor complete');

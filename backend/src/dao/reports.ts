@@ -1,5 +1,12 @@
 import { pool } from '../services/db';
 
+export interface ReportMeta {
+  model?: string;
+  iterations?: number;
+  total_tokens?: number;
+  duration_ms?: number;
+}
+
 export interface Report {
   id: number;
   repo_id: number;
@@ -9,21 +16,26 @@ export interface Report {
     health?: unknown;
     starting_points?: unknown;
   } | null;
+  meta: ReportMeta | null;
   created_at: Date;
 }
 
 export async function findReportByRepoId(repo_id: number): Promise<Report | null> {
   const result = await pool.query<Report>(
-    'SELECT id, repo_id, analysis, created_at FROM reports WHERE repo_id = $1 ORDER BY created_at DESC LIMIT 1',
+    'SELECT id, repo_id, analysis, meta, created_at FROM reports WHERE repo_id = $1 ORDER BY created_at DESC LIMIT 1',
     [repo_id]
   );
   return result.rows[0] ?? null;
 }
 
-export async function insertReport(repo_id: number, analysis: Report['analysis']): Promise<Report> {
+export async function insertReport(
+  repo_id: number,
+  analysis: Report['analysis'],
+  meta: ReportMeta | null = null
+): Promise<Report> {
   const result = await pool.query<Report>(
-    'INSERT INTO reports (repo_id, analysis) VALUES ($1, $2) RETURNING id, repo_id, analysis, created_at',
-    [repo_id, JSON.stringify(analysis)]
+    'INSERT INTO reports (repo_id, analysis, meta) VALUES ($1, $2, $3) RETURNING id, repo_id, analysis, meta, created_at',
+    [repo_id, JSON.stringify(analysis), meta ? JSON.stringify(meta) : null]
   );
   return result.rows[0];
 }

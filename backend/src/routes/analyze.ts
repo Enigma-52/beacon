@@ -74,7 +74,7 @@ analyzeRouter.get('/report/:id', async (req: Request, res: Response) => {
     }
 
     const report = await findReportByRepoId(id);
-    res.json({ ...repo, analysis: report?.analysis ?? null });
+    res.json({ ...repo, analysis: report?.analysis ?? null, meta: report?.meta ?? null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal server error' });

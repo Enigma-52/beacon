@@ -1,14 +1,15 @@
 import Ajv from 'ajv';
 import { IssueResearchSchema } from '../schemas/issue-research.schema';
 import type { IssueResearch } from '../schemas/issue-research.schema';
+import { complete } from '../services/openrouter';
+import type { ChatMessage } from '../services/openrouter';
+import { fetchWithRetry } from '../services/http';
 import { log } from '../services/logger';
 import type { AgentEmitter } from './events';
 
 const ajv = new Ajv({ strict: false });
 const validateResearch = ajv.compile(IssueResearchSchema);
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 const GITHUB_API = 'https://api.github.com';
 const MAX_ITERATIONS = 12;
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -23,7 +24,7 @@ function buildHeaders(): Record<string, string> {
 }
 
 async function ghGet<T = Record<string, unknown>>(path: string): Promise<T> {
-  const res = await fetch(`${GITHUB_API}${path}`, { headers: buildHeaders() });
+  const res = await fetchWithRetry(`${GITHUB_API}${path}`, { headers: buildHeaders() }, { retries: 2, timeoutMs: 15_000 });
   if (!res.ok) throw new Error(`GitHub ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -93,7 +94,7 @@ async function getPrChangedFiles(owner: string, repo: string, prNumber: number):
 }
 
 async function getFileContent(owner: string, repo: string, path: string): Promise<string> {
-  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, { headers: buildHeaders() });
+  const res = await fetchWithRetry(`${GITHUB_API}/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, { headers: buildHeaders() }, { retries: 2, timeoutMs: 15_000 });
   if (res.status === 404) {
     // File doesn't exist at HEAD (common with changelog/temp files from PRs) — not a tool failure
     return JSON.stringify({ note: `File not found at HEAD: ${path}. It may have been added or deleted in a past PR. Skip this file.` });
@@ -212,13 +213,6 @@ const RESEARCHER_TOOLS = [
   },
 ] as const;
 
-interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-}
-
 export async function runIssueResearcherAgent(
   owner: string,
   repo: string,
@@ -226,10 +220,6 @@ export async function runIssueResearcherAgent(
   emit: AgentEmitter = noopEmitter,
   signal: AbortSignal = new AbortController().signal
 ): Promise<IssueResearch> {
-  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-
   log.info({ owner, repo, issueNumber }, 'issue researcher agent started');
   emit({ type: 'research_started', owner, repo, issueNumber });
 
@@ -252,7 +242,7 @@ Important:
 - For files_to_change URL: always use https://github.com/${owner}/${repo}/blob/${defaultBranch}/{path} — NEVER use a commit SHA in the URL.
 - For reviewer_to_ping: pick a specific individual contributor (not the org account). Use the author or reviewer of the most relevant merged PR: https://github.com/{login}`;
 
-  const messages: Message[] = [
+  const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: `Research issue #${issueNumber} in ${owner}/${repo}. Follow the strategy and call produce_issue_research when done.` },
   ];
@@ -274,23 +264,7 @@ Important:
       });
     }
 
-    const res = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/beacon',
-        'X-Title': 'Beacon',
-      },
-      body: JSON.stringify({ model, messages, tools: RESEARCHER_TOOLS, tool_choice: 'auto', temperature: 0.1 }),
-      signal,
-    });
-
-    if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-
-    const data = await res.json() as {
-      choices: { message: { role: string; content: string | null; tool_calls?: Message['tool_calls'] }; finish_reason: string }[];
-    };
+    const data = await complete({ messages, tools: RESEARCHER_TOOLS, temperature: 0.1, signal });
     const choice = data.choices[0];
 
     messages.push({ role: 'assistant', content: choice.message.content, tool_calls: choice.message.tool_calls });
